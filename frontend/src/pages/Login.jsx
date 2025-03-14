@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Box, 
   Typography, 
@@ -10,22 +10,32 @@ import {
   InputAdornment,
   IconButton,
   Alert,
-  useTheme
+  useTheme,
+  CircularProgress
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff
 } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
 
-const Login = ({ onLogin }) => {
+const Login = () => {
   const theme = useTheme();
+  const { login, error: authError, loading } = useAuth();
+  
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+
+  // Clear error when auth error changes
+  useEffect(() => {
+    if (authError) {
+      setError(authError);
+    }
+  }, [authError]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -33,30 +43,27 @@ const Login = ({ onLogin }) => {
       ...prev,
       [name]: value
     }));
+    // Clear error when user types
+    setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
     // Validate form
     if (!formData.email || !formData.password) {
       setError('Please enter both email and password');
-      setLoading(false);
       return;
     }
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo purposes, accept any login
-      onLogin();
+      // Call login from auth context
+      await login(formData.email, formData.password);
+      // No need to redirect, the protected route will handle it
     } catch (err) {
-      setError('Invalid email or password');
-    } finally {
-      setLoading(false);
+      console.error('Login submission error:', err);
+      setError(err.message || 'Invalid email or password');
     }
   };
 
@@ -110,6 +117,7 @@ const Login = ({ onLogin }) => {
               onChange={handleChange}
               variant="outlined"
               sx={{ mb: 2 }}
+              disabled={loading}
             />
             <TextField
               margin="normal"
@@ -124,6 +132,7 @@ const Login = ({ onLogin }) => {
               onChange={handleChange}
               variant="outlined"
               sx={{ mb: 3 }}
+              disabled={loading}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
@@ -131,6 +140,7 @@ const Login = ({ onLogin }) => {
                       aria-label="toggle password visibility"
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
+                      disabled={loading}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
@@ -150,7 +160,11 @@ const Login = ({ onLogin }) => {
               }}
               disabled={loading}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                'Sign In'
+              )}
             </Button>
             <Box sx={{ textAlign: 'center', mt: 2 }}>
               <Link href="#" variant="body2" sx={{ color: theme.palette.primary.main }}>

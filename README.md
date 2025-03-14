@@ -30,8 +30,8 @@ InfraControl is a comprehensive infrastructure management platform designed to p
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/infracontrol.git
-   cd infracontrol
+   git clone https://github.com/JTXOfficial/InfraControl.git
+   cd InfraControl
    ```
 
 2. Install dependencies:
