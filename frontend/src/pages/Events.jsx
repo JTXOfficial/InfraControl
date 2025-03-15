@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -21,16 +22,21 @@ import {
   Select,
   MenuItem,
   Chip,
+  Menu,
+  Tooltip,
   useTheme
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Download as DownloadIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 
 const Events = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,148 +54,165 @@ const Events = () => {
     resourceType: 'All Resources',
     status: 'All Statuses'
   });
+  
+  // Export menu state
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+  const exportMenuOpen = Boolean(exportMenuAnchor);
 
   useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      const mockEvents = [
-        { 
-          id: '1', 
-          time: '2025-03-14T09:30:00Z', 
-          type: 'Create', 
-          resource: 'Instance',
-          resourceId: 'web-server-01',
-          user: 'john.doe@example.com',
-          ip: '192.168.1.100',
-          details: 'Created new web server instance',
-          status: 'Success',
-          severity: 'Info'
-        },
-        { 
-          id: '2', 
-          time: '2025-03-14T08:45:22Z', 
-          type: 'Update', 
-          resource: 'User',
-          resourceId: 'jane.smith',
-          user: 'admin@example.com',
-          ip: '192.168.1.101',
-          details: 'Updated user permissions',
-          status: 'Success',
-          severity: 'Info'
-        },
-        { 
-          id: '3', 
-          time: '2025-03-14T07:15:10Z', 
-          type: 'Delete', 
-          resource: 'Instance',
-          resourceId: 'test-server-03',
-          user: 'john.doe@example.com',
-          ip: '192.168.1.100',
-          details: 'Deleted test server instance',
-          status: 'Success',
-          severity: 'Info'
-        },
-        { 
-          id: '4', 
-          time: '2025-03-14T06:30:45Z', 
-          type: 'Login', 
-          resource: 'System',
-          resourceId: 'auth-service',
-          user: 'jane.smith@example.com',
-          ip: '192.168.1.102',
-          details: 'User login successful',
-          status: 'Success',
-          severity: 'Info'
-        },
-        { 
-          id: '5', 
-          time: '2025-03-14T05:20:30Z', 
-          type: 'Error', 
-          resource: 'Instance',
-          resourceId: 'db-server-01',
-          user: 'system',
-          ip: '192.168.1.103',
-          details: 'Database connection failed',
-          status: 'Failed',
-          severity: 'Error'
-        },
-        { 
-          id: '6', 
-          time: '2025-03-14T04:10:15Z', 
-          type: 'Update', 
-          resource: 'Setting',
-          resourceId: 'notification-settings',
-          user: 'admin@example.com',
-          ip: '192.168.1.101',
-          details: 'Updated notification settings',
-          status: 'Warning',
-          severity: 'Warning'
-        }
-      ];
+    fetchEvents();
+  }, []);
+
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      // TODO: Replace with actual API call
+      // const response = await fetch('/api/events');
+      // const data = await response.json();
+      
+      // Mock data for development
+      const mockEvents = Array.from({ length: 20 }, (_, i) => ({
+        id: `evt-${1000 + i}`,
+        time: new Date(Date.now() - i * 3600000).toISOString(),
+        type: ['Create', 'Update', 'Delete', 'Login', 'Logout', 'Error'][Math.floor(Math.random() * 6)],
+        resource: ['Instance', 'User', 'Setting', 'System'][Math.floor(Math.random() * 4)],
+        resourceId: `res-${2000 + i}`,
+        user: ['admin@example.com', 'user1@example.com', 'user2@example.com'][Math.floor(Math.random() * 3)],
+        ip: `192.168.1.${Math.floor(Math.random() * 255)}`,
+        details: `Event details for event ${1000 + i}`,
+        status: ['Success', 'Failed', 'Warning'][Math.floor(Math.random() * 3)],
+        severity: ['Critical', 'Error', 'Warning', 'Info'][Math.floor(Math.random() * 4)]
+      }));
       
       setEvents(mockEvents);
       setLoading(false);
-    }, 1500);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleSearchChange = (event) => {
-    setSearchQuery(event.target.value);
-  };
-
-  const handleFilterChange = (filterType, value) => {
-    setFilters({
-      ...filters,
-      [filterType]: value
-    });
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      setLoading(false);
+    }
   };
 
   const handleRefresh = () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    fetchEvents();
   };
 
-  // Filter events based on search query and selected filters
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleFilterChange = (filterName, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+  };
+
+  const handleRowClick = (eventId) => {
+    navigate(`/events/${eventId}`);
+  };
+
+  const handleExportMenuOpen = (event) => {
+    setExportMenuAnchor(event.currentTarget);
+  };
+
+  const handleExportMenuClose = () => {
+    setExportMenuAnchor(null);
+  };
+
+  const handleExportJSON = () => {
+    const dataToExport = filteredEvents.map(event => ({
+      id: event.id,
+      timestamp: event.time,
+      type: event.type,
+      resource: event.resource,
+      resourceId: event.resourceId,
+      user: event.user,
+      ip: event.ip,
+      details: event.details,
+      status: event.status,
+      severity: event.severity
+    }));
+    
+    const dataStr = JSON.stringify(dataToExport, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `events-export-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    handleExportMenuClose();
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Timestamp', 'Type', 'Resource', 'ResourceID', 'User', 'IP', 'Details', 'Status', 'Severity'];
+    
+    const dataRows = filteredEvents.map(event => [
+      event.id,
+      event.time,
+      event.type,
+      event.resource,
+      event.resourceId,
+      event.user,
+      event.ip,
+      event.details,
+      event.status,
+      event.severity
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...dataRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const dataUri = 'data:text/csv;charset=utf-8,'+ encodeURIComponent(csvContent);
+    
+    const exportFileDefaultName = `events-export-${new Date().toISOString().split('T')[0]}.csv`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    handleExportMenuClose();
+  };
+
+  // Apply filters and search
   const filteredEvents = events.filter(event => {
-    const matchesSearch = 
-      searchQuery === '' || 
-      event.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.resourceId.toLowerCase().includes(searchQuery.toLowerCase());
+    // Apply search query
+    if (searchQuery && !Object.values(event).some(value => 
+      String(value).toLowerCase().includes(searchQuery.toLowerCase())
+    )) {
+      return false;
+    }
     
-    const matchesEventType = 
-      filters.eventType === 'All Types' || 
-      event.type === filters.eventType;
+    // Apply filters
+    if (filters.eventType !== 'All Types' && event.type !== filters.eventType) {
+      return false;
+    }
     
-    const matchesResourceType = 
-      filters.resourceType === 'All Resources' || 
-      event.resource === filters.resourceType;
+    if (filters.resourceType !== 'All Resources' && event.resource !== filters.resourceType) {
+      return false;
+    }
     
-    const matchesStatus = 
-      filters.status === 'All Statuses' || 
-      event.status === filters.status;
+    if (filters.status !== 'All Statuses' && event.status !== filters.status) {
+      return false;
+    }
     
-    return matchesSearch && matchesEventType && matchesResourceType && matchesStatus;
+    return true;
   });
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }).format(date);
+    return date.toLocaleString();
   };
 
   const getSeverityColor = (severity) => {
     switch(severity.toLowerCase()) {
+      case 'critical':
+        return theme.palette.error.dark;
       case 'error':
         return theme.palette.error.main;
       case 'warning':
@@ -220,6 +243,27 @@ const Events = () => {
         <Typography variant="h4" component="h1">
           Event Logs
         </Typography>
+        
+        <Box>
+          <Tooltip title="Export Events">
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportMenuOpen}
+              sx={{ mr: 1 }}
+            >
+              Export
+            </Button>
+          </Tooltip>
+          <Menu
+            anchorEl={exportMenuAnchor}
+            open={exportMenuOpen}
+            onClose={handleExportMenuClose}
+          >
+            <MenuItem onClick={handleExportJSON}>Export as JSON</MenuItem>
+            <MenuItem onClick={handleExportCSV}>Export as CSV</MenuItem>
+          </Menu>
+        </Box>
       </Box>
       
       <Card>
@@ -304,18 +348,19 @@ const Events = () => {
                 <TableCell>Details</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Severity</TableCell>
+                <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
                     <CircularProgress size={24} />
                   </TableCell>
                 </TableRow>
               ) : filteredEvents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
                     <Typography variant="body2" color="text.secondary">
                       No events found
                     </Typography>
@@ -323,7 +368,12 @@ const Events = () => {
                 </TableRow>
               ) : (
                 filteredEvents.map((event) => (
-                  <TableRow key={event.id}>
+                  <TableRow 
+                    key={event.id} 
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => handleRowClick(event.id)}
+                  >
                     <TableCell>{formatDate(event.time)}</TableCell>
                     <TableCell>{event.type}</TableCell>
                     <TableCell>
@@ -360,6 +410,17 @@ const Events = () => {
                           fontWeight: 500
                         }}
                       />
+                    </TableCell>
+                    <TableCell align="center">
+                      <IconButton 
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/events/${event.id}`);
+                        }}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))

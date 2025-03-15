@@ -12,9 +12,12 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import Events from './pages/Events';
+import EventDetail from './pages/EventDetail';
+import EventStream from './pages/EventStream';
 import Instances from './pages/Instances';
 import Users from './pages/Users';
 import InstanceDetail from './pages/InstanceDetail';
+import InstanceCreate from './pages/InstanceCreate';
 import UserDetail from './pages/UserDetail';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
@@ -82,10 +85,13 @@ const AppRoutes = () => {
         <Route path="/" element={<Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/instances" element={<Instances />} />
+        <Route path="/instances/create" element={<InstanceCreate />} />
         <Route path="/instances/:id" element={<InstanceDetail />} />
         <Route path="/users" element={<Users />} />
         <Route path="/users/:id" element={<UserDetail />} />
         <Route path="/events" element={<Events />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/event-stream" element={<EventStream />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/notifications" element={<Notifications />} />
       </Route>

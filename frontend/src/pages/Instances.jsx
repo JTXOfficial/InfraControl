@@ -136,8 +136,8 @@ const Instances = () => {
   };
 
   const handleAddInstance = () => {
-    // Navigate to instance creation page or open modal
-    console.log('Add instance clicked');
+    // Navigate to instance creation page
+    navigate('/instances/create');
   };
 
   const handleEditInstance = (id) => {

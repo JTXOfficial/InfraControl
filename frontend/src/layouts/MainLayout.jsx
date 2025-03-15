@@ -152,6 +152,18 @@ const MainLayout = () => {
           <ListItem 
             button 
             component={RouterLink}
+            to="/event-stream" 
+            sx={{ mb: 1 }}
+          >
+            <ListItemIcon sx={{ minWidth: 40 }}>
+              <RefreshIcon color="inherit" />
+            </ListItemIcon>
+            <ListItemText primary="Event Stream" />
+          </ListItem>
+          
+          <ListItem 
+            button 
+            component={RouterLink}
             to="/settings" 
             sx={{ mb: 1 }}
           >

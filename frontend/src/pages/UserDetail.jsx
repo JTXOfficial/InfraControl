@@ -36,7 +36,9 @@ import {
   History as HistoryIcon,
   Settings as SettingsIcon,
   Notifications as NotificationsIcon,
-  VpnKey as ApiKeyIcon
+  VpnKey as ApiKeyIcon,
+  Logout as LogoutIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 
 // Custom TabPanel component
@@ -60,6 +62,94 @@ function TabPanel(props) {
   );
 }
 
+// Permission data structure
+const permissionGroups = [
+  {
+    name: 'Instance Management',
+    permissions: [
+      { id: 'instance:view', name: 'View Instances', description: 'View instance details and status' },
+      { id: 'instance:create', name: 'Create Instances', description: 'Create new instances' },
+      { id: 'instance:edit', name: 'Edit Instances', description: 'Modify instance configuration' },
+      { id: 'instance:delete', name: 'Delete Instances', description: 'Delete instances' },
+      { id: 'instance:restart', name: 'Restart Instances', description: 'Restart instances' }
+    ]
+  },
+  {
+    name: 'User Management',
+    permissions: [
+      { id: 'user:view', name: 'View Users', description: 'View user details' },
+      { id: 'user:create', name: 'Create Users', description: 'Create new users' },
+      { id: 'user:edit', name: 'Edit Users', description: 'Modify user details and permissions' },
+      { id: 'user:delete', name: 'Delete Users', description: 'Delete users' }
+    ]
+  },
+  {
+    name: 'Settings',
+    permissions: [
+      { id: 'settings:view', name: 'View Settings', description: 'View system settings' },
+      { id: 'settings:edit', name: 'Edit Settings', description: 'Modify system settings' }
+    ]
+  },
+  {
+    name: 'Events & Logs',
+    permissions: [
+      { id: 'events:view', name: 'View Events', description: 'View event logs' },
+      { id: 'events:export', name: 'Export Events', description: 'Export event logs' }
+    ]
+  }
+];
+
+// Predefined roles with permissions
+const predefinedRoles = {
+  admin: {
+    name: 'Administrator',
+    description: 'Full access to all features',
+    permissions: [
+      'instance:view', 'instance:create', 'instance:edit', 'instance:delete', 'instance:restart',
+      'user:view', 'user:create', 'user:edit', 'user:delete',
+      'settings:view', 'settings:edit',
+      'events:view', 'events:export'
+    ]
+  },
+  manager: {
+    name: 'Manager',
+    description: 'Can manage instances and view users',
+    permissions: [
+      'instance:view', 'instance:create', 'instance:edit', 'instance:restart',
+      'user:view',
+      'settings:view',
+      'events:view', 'events:export'
+    ]
+  },
+  operator: {
+    name: 'Operator',
+    description: 'Can view and restart instances',
+    permissions: [
+      'instance:view', 'instance:restart',
+      'events:view'
+    ]
+  },
+  viewer: {
+    name: 'Viewer',
+    description: 'Read-only access',
+    permissions: [
+      'instance:view',
+      'events:view'
+    ]
+  }
+};
+
+// Activity types and their icons
+const activityIcons = {
+  login: <PersonIcon fontSize="small" />,
+  logout: <LogoutIcon fontSize="small" />,
+  create: <AddIcon fontSize="small" />,
+  update: <EditIcon fontSize="small" />,
+  delete: <DeleteIcon fontSize="small" />,
+  permission: <SecurityIcon fontSize="small" />,
+  settings: <SettingsIcon fontSize="small" />
+};
+
 const UserDetail = () => {
   const theme = useTheme();
   const { id } = useParams();
@@ -68,6 +158,13 @@ const UserDetail = () => {
   const [user, setUser] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityHasMore, setActivityHasMore] = useState(true);
+  const [userPermissions, setUserPermissions] = useState([]);
+  const [selectedRole, setSelectedRole] = useState('');
+  const [isCustomRole, setIsCustomRole] = useState(false);
+  const [permissionChanged, setPermissionChanged] = useState(false);
 
   useEffect(() => {
     // Simulate API call to fetch user details
@@ -132,6 +229,27 @@ const UserDetail = () => {
     return () => clearTimeout(timer);
   }, [id]);
 
+  useEffect(() => {
+    if (user) {
+      // Set initial permissions based on user role
+      if (user.role && predefinedRoles[user.role.toLowerCase()]) {
+        setSelectedRole(user.role.toLowerCase());
+        setUserPermissions(predefinedRoles[user.role.toLowerCase()].permissions);
+        setIsCustomRole(false);
+      } else {
+        setSelectedRole('custom');
+        setUserPermissions(user.permissions || []);
+        setIsCustomRole(true);
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user && tabValue === 2) { // Load activity when the activity tab is selected
+      fetchUserActivity();
+    }
+  }, [user, tabValue, activityPage]);
+
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
@@ -175,6 +293,328 @@ const UserDetail = () => {
       .join('')
       .toUpperCase();
   };
+
+  const handleRoleChange = (event) => {
+    const role = event.target.value;
+    setSelectedRole(role);
+    
+    if (role === 'custom') {
+      setIsCustomRole(true);
+      // Keep current permissions when switching to custom
+    } else {
+      setIsCustomRole(false);
+      setUserPermissions(predefinedRoles[role].permissions);
+      setPermissionChanged(true);
+    }
+  };
+  
+  const handlePermissionToggle = (permissionId) => {
+    setUserPermissions(prev => {
+      if (prev.includes(permissionId)) {
+        return prev.filter(id => id !== permissionId);
+      } else {
+        return [...prev, permissionId];
+      }
+    });
+    
+    // When manually changing permissions, switch to custom role
+    if (!isCustomRole) {
+      setSelectedRole('custom');
+      setIsCustomRole(true);
+    }
+    
+    setPermissionChanged(true);
+  };
+  
+  const handleSavePermissions = () => {
+    // TODO: Implement API call to save permissions
+    console.log('Saving permissions:', {
+      userId: id,
+      role: selectedRole,
+      permissions: userPermissions
+    });
+    
+    setPermissionChanged(false);
+    // Show success message
+  };
+  
+  const isPermissionEnabled = (permissionId) => {
+    return userPermissions.includes(permissionId);
+  };
+
+  const fetchUserActivity = async () => {
+    if (!user || activityLoading) return;
+    
+    setActivityLoading(true);
+    try {
+      // TODO: Replace with actual API call
+      // const response = await fetch(`/api/users/${id}/activity?page=${activityPage}`);
+      // const data = await response.json();
+      
+      // Mock data for development
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      
+      const mockActivity = Array.from({ length: 10 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - Math.floor(i / 2));
+        date.setHours(date.getHours() - (i % 12));
+        
+        const types = ['login', 'logout', 'update', 'create', 'delete', 'permission', 'settings'];
+        const type = types[Math.floor(Math.random() * types.length)];
+        
+        let description = '';
+        switch (type) {
+          case 'login':
+            description = 'Logged in to the system';
+            break;
+          case 'logout':
+            description = 'Logged out of the system';
+            break;
+          case 'update':
+            description = 'Updated profile information';
+            break;
+          case 'create':
+            description = 'Created a new instance';
+            break;
+          case 'delete':
+            description = 'Deleted an instance';
+            break;
+          case 'permission':
+            description = 'Permission settings changed';
+            break;
+          case 'settings':
+            description = 'Updated account settings';
+            break;
+          default:
+            description = 'Performed an action';
+        }
+        
+        return {
+          id: `act-${Date.now()}-${i}`,
+          type,
+          description,
+          timestamp: date.toISOString(),
+          ip: `192.168.1.${Math.floor(Math.random() * 255)}`,
+          details: {
+            browser: 'Chrome',
+            os: 'Windows 10',
+            location: 'New York, USA'
+          }
+        };
+      });
+      
+      setRecentActivity(prev => 
+        activityPage === 1 ? mockActivity : [...prev, ...mockActivity]
+      );
+      setActivityHasMore(activityPage < 3); // Limit to 3 pages for mock data
+      setActivityLoading(false);
+    } catch (error) {
+      console.error('Error fetching user activity:', error);
+      setActivityLoading(false);
+    }
+  };
+  
+  const handleLoadMoreActivity = () => {
+    setActivityPage(prev => prev + 1);
+  };
+  
+  const getActivityIcon = (type) => {
+    return activityIcons[type] || <HistoryIcon fontSize="small" />;
+  };
+  
+  const getActivityColor = (type) => {
+    switch (type) {
+      case 'login':
+        return theme.palette.success.main;
+      case 'logout':
+        return theme.palette.info.main;
+      case 'create':
+        return theme.palette.success.main;
+      case 'update':
+        return theme.palette.warning.main;
+      case 'delete':
+        return theme.palette.error.main;
+      case 'permission':
+        return theme.palette.secondary.main;
+      case 'settings':
+        return theme.palette.primary.main;
+      default:
+        return theme.palette.grey[500];
+    }
+  };
+
+  const renderPermissionsTab = () => (
+    <Box>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Role Assignment
+        </Typography>
+        <Paper variant="outlined" sx={{ p: 3 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <InputLabel id="role-select-label" sx={{ mb: 1 }}>User Role</InputLabel>
+              <Select
+                labelId="role-select-label"
+                id="role-select"
+                value={selectedRole}
+                onChange={handleRoleChange}
+                fullWidth
+              >
+                {Object.entries(predefinedRoles).map(([key, role]) => (
+                  <MenuItem key={key} value={key}>
+                    {role.name}
+                  </MenuItem>
+                ))}
+                <MenuItem value="custom">Custom Role</MenuItem>
+              </Select>
+              
+              {!isCustomRole && selectedRole && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {predefinedRoles[selectedRole].description}
+                </Typography>
+              )}
+            </Grid>
+          </Grid>
+          
+          {permissionChanged && (
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button 
+                variant="contained" 
+                color="primary"
+                onClick={handleSavePermissions}
+              >
+                Save Changes
+              </Button>
+            </Box>
+          )}
+        </Paper>
+      </Box>
+      
+      <Box>
+        <Typography variant="h6" gutterBottom>
+          Permissions
+        </Typography>
+        
+        {permissionGroups.map((group) => (
+          <Paper key={group.name} variant="outlined" sx={{ mb: 3 }}>
+            <Box sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" fontWeight="medium">
+                {group.name}
+              </Typography>
+            </Box>
+            <Divider />
+            <List disablePadding>
+              {group.permissions.map((permission) => (
+                <ListItem 
+                  key={permission.id}
+                  divider
+                  secondaryAction={
+                    <Switch
+                      edge="end"
+                      checked={isPermissionEnabled(permission.id)}
+                      onChange={() => handlePermissionToggle(permission.id)}
+                      disabled={!isCustomRole && selectedRole !== 'custom'}
+                    />
+                  }
+                >
+                  <ListItemText 
+                    primary={permission.name}
+                    secondary={permission.description}
+                    primaryTypographyProps={{ fontWeight: 'medium' }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        ))}
+      </Box>
+    </Box>
+  );
+
+  const renderActivityTab = () => (
+    <Box>
+      <Typography variant="h6" gutterBottom>
+        Recent Activity
+      </Typography>
+      
+      <Paper variant="outlined">
+        {recentActivity.length === 0 ? (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              No activity found for this user
+            </Typography>
+          </Box>
+        ) : (
+          <List disablePadding>
+            {recentActivity.map((activity, index) => {
+              const activityDate = new Date(activity.timestamp);
+              const formattedDate = formatDate(activity.timestamp);
+              
+              // Group activities by date
+              const showDateDivider = index === 0 || 
+                new Date(recentActivity[index - 1].timestamp).toDateString() !== activityDate.toDateString();
+              
+              return (
+                <Box key={activity.id}>
+                  {showDateDivider && (
+                    <Box sx={{ p: 2, bgcolor: 'background.default' }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {activityDate.toDateString() === new Date().toDateString() 
+                          ? 'Today' 
+                          : activityDate.toDateString() === new Date(Date.now() - 86400000).toDateString()
+                            ? 'Yesterday'
+                            : activityDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+                        }
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  <ListItem 
+                    divider={index < recentActivity.length - 1}
+                    sx={{ py: 2 }}
+                  >
+                    <ListItemIcon sx={{ 
+                      color: getActivityColor(activity.type),
+                      minWidth: 40
+                    }}>
+                      {getActivityIcon(activity.type)}
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={activity.description}
+                      secondary={
+                        <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {activityDate.toLocaleTimeString()} • IP: {activity.ip}
+                          </Typography>
+                          {activity.details && (
+                            <Typography variant="caption" color="text.secondary">
+                              {activity.details.browser} • {activity.details.os} • {activity.details.location}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                </Box>
+              );
+            })}
+            
+            {activityHasMore && (
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <Button 
+                  onClick={handleLoadMoreActivity}
+                  disabled={activityLoading}
+                  startIcon={activityLoading ? <CircularProgress size={16} /> : null}
+                >
+                  {activityLoading ? 'Loading...' : 'Load More'}
+                </Button>
+              </Box>
+            )}
+          </List>
+        )}
+      </Paper>
+    </Box>
+  );
 
   if (loading) {
     return (
@@ -406,33 +846,7 @@ const UserDetail = () => {
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
                 
-                <List disablePadding>
-                  {recentActivity.map((activity) => (
-                    <ListItem 
-                      key={activity.id}
-                      disablePadding
-                      sx={{ 
-                        py: 1.5,
-                        borderBottom: `1px solid ${theme.palette.divider}`,
-                        '&:last-child': { borderBottom: 'none' }
-                      }}
-                    >
-                      <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <Typography variant="body1">
-                              {activity.action}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatDate(activity.timestamp)}
-                            </Typography>
-                          </Box>
-                        }
-                        secondary={activity.resource}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
+                {renderActivityTab()}
               </CardContent>
             </Card>
           </Grid>
@@ -440,224 +854,11 @@ const UserDetail = () => {
       </TabPanel>
       
       <TabPanel value={tabValue} index={1}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              User Permissions
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Instance Management
-                </Typography>
-                <List disablePadding>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('instances:read')}
-                          color="primary"
-                        />
-                      }
-                      label="View instances"
-                    />
-                  </ListItem>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('instances:write')}
-                          color="primary"
-                        />
-                      }
-                      label="Create/Edit instances"
-                    />
-                  </ListItem>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('instances:delete')}
-                          color="primary"
-                        />
-                      }
-                      label="Delete instances"
-                    />
-                  </ListItem>
-                </List>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>
-                  User Management
-                </Typography>
-                <List disablePadding>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('users:read')}
-                          color="primary"
-                        />
-                      }
-                      label="View users"
-                    />
-                  </ListItem>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('users:write')}
-                          color="primary"
-                        />
-                      }
-                      label="Create/Edit users"
-                    />
-                  </ListItem>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('users:delete')}
-                          color="primary"
-                        />
-                      }
-                      label="Delete users"
-                    />
-                  </ListItem>
-                </List>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Settings
-                </Typography>
-                <List disablePadding>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('settings:read')}
-                          color="primary"
-                        />
-                      }
-                      label="View settings"
-                    />
-                  </ListItem>
-                  <ListItem disablePadding sx={{ py: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch 
-                          checked={user.permissions.includes('settings:write')}
-                          color="primary"
-                        />
-                      }
-                      label="Modify settings"
-                    />
-                  </ListItem>
-                </List>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+        {renderPermissionsTab()}
       </TabPanel>
       
       <TabPanel value={tabValue} index={2}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
-                Activity History
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel id="activity-time-range-label">Time Range</InputLabel>
-                <Select
-                  labelId="activity-time-range-label"
-                  id="activity-time-range-select"
-                  value="7d"
-                  label="Time Range"
-                >
-                  <MenuItem value="24h">Last 24 Hours</MenuItem>
-                  <MenuItem value="7d">Last 7 Days</MenuItem>
-                  <MenuItem value="30d">Last 30 Days</MenuItem>
-                  <MenuItem value="90d">Last 90 Days</MenuItem>
-                  <MenuItem value="all">All Time</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Divider sx={{ mb: 3 }} />
-            
-            <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-              <Box sx={{ height: 400, overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: theme.palette.background.paper, zIndex: 1 }}>
-                    <tr>
-                      <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Timestamp</th>
-                      <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Action</th>
-                      <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Resource</th>
-                      <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>IP Address</th>
-                      <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { timestamp: '2024-03-14 01:45:22', action: 'Login', resource: 'System', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-14 01:46:15', action: 'Create', resource: 'Instance (i-12345)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-14 01:50:33', action: 'Update', resource: 'Instance (i-12345)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-14 02:05:12', action: 'Start', resource: 'Instance (i-12345)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-13 14:22:45', action: 'Login', resource: 'System', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-13 14:30:18', action: 'Create', resource: 'User (user-789)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-13 14:35:22', action: 'Update', resource: 'User (user-789)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-13 15:10:05', action: 'Delete', resource: 'Instance (i-54321)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-12 09:15:33', action: 'Login', resource: 'System', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-12 09:22:17', action: 'Create', resource: 'Instance (i-54321)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-12 09:45:52', action: 'Update', resource: 'Instance (i-54321)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-12 10:05:18', action: 'Start', resource: 'Instance (i-54321)', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-11 11:30:42', action: 'Login', resource: 'System', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-11 11:45:15', action: 'Update', resource: 'User Settings', ip: '192.168.1.1', status: 'success' },
-                      { timestamp: '2024-03-11 12:05:33', action: 'Create', resource: 'API Key', ip: '192.168.1.1', status: 'success' },
-                    ].map((activity, index) => (
-                      <tr key={index} style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-                        <td style={{ padding: '16px' }}>{activity.timestamp}</td>
-                        <td style={{ padding: '16px' }}>
-                          <Chip 
-                            label={activity.action} 
-                            size="small"
-                            color={
-                              activity.action === 'Create' ? 'success' :
-                              activity.action === 'Update' ? 'primary' :
-                              activity.action === 'Delete' ? 'error' :
-                              activity.action === 'Start' ? 'info' :
-                              'default'
-                            }
-                            sx={{ minWidth: '80px' }}
-                          />
-                        </td>
-                        <td style={{ padding: '16px' }}>{activity.resource}</td>
-                        <td style={{ padding: '16px' }}>{activity.ip}</td>
-                        <td style={{ padding: '16px' }}>
-                          <Chip 
-                            label={activity.status} 
-                            size="small"
-                            color={activity.status === 'success' ? 'success' : 'error'}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Box>
-            </Paper>
-            
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-              <Button variant="outlined" startIcon={<RefreshIcon />}>
-                Refresh
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
+        {renderActivityTab()}
       </TabPanel>
       
       <TabPanel value={tabValue} index={3}>
