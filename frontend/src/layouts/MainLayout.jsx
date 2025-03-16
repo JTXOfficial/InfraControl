@@ -32,7 +32,9 @@ import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   Notifications as NotificationsIcon,
-  AccountCircle as AccountCircleIcon
+  AccountCircle as AccountCircleIcon,
+  Folder as FolderIcon,
+  Public as PublicIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -123,6 +125,30 @@ const MainLayout = () => {
               <StorageIcon color="inherit" />
             </ListItemIcon>
             <ListItemText primary="Instances" />
+          </ListItem>
+          
+          <ListItem 
+            button 
+            component={RouterLink}
+            to="/projects" 
+            sx={{ mb: 1 }}
+          >
+            <ListItemIcon sx={{ minWidth: 40 }}>
+              <FolderIcon color="inherit" />
+            </ListItemIcon>
+            <ListItemText primary="Projects" />
+          </ListItem>
+          
+          <ListItem 
+            button 
+            component={RouterLink}
+            to="/zones" 
+            sx={{ mb: 1 }}
+          >
+            <ListItemIcon sx={{ minWidth: 40 }}>
+              <PublicIcon color="inherit" />
+            </ListItemIcon>
+            <ListItemText primary="Zones" />
           </ListItem>
           
           <ListItem 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -24,7 +24,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Paper
+  Paper,
+  Snackbar,
+  Alert,
+  TextField
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -40,6 +43,7 @@ import {
   Logout as LogoutIcon,
   Add as AddIcon
 } from '@mui/icons-material';
+import userService from '../services/userService';
 
 // Custom TabPanel component
 function TabPanel(props) {
@@ -150,6 +154,45 @@ const activityIcons = {
   settings: <SettingsIcon fontSize="small" />
 };
 
+// Fallback component for when user data is not available
+const UserNotFound = ({ id, onBack }) => {
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '70vh',
+      textAlign: 'center'
+    }}>
+      <Typography variant="h4" color="error" gutterBottom>
+        User Not Found
+      </Typography>
+      <Typography variant="body1" sx={{ mb: 3 }}>
+        We couldn't find a user with ID: {id}
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={onBack}
+          startIcon={<ArrowBackIcon />}
+        >
+          Back to Users
+        </Button>
+        <Button 
+          variant="outlined" 
+          component={Link} 
+          to="/users"
+          startIcon={<RefreshIcon />}
+        >
+          Refresh
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
 const UserDetail = () => {
   const theme = useTheme();
   const { id } = useParams();
@@ -165,68 +208,55 @@ const UserDetail = () => {
   const [selectedRole, setSelectedRole] = useState('');
   const [isCustomRole, setIsCustomRole] = useState(false);
   const [permissionChanged, setPermissionChanged] = useState(false);
+  const [error, setError] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editedUser, setEditedUser] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+
+  const fetchUserData = async () => {
+    setLoading(true);
+    try {
+      console.log('Fetching user data for ID:', id);
+      // Add a small delay to ensure the component is mounted
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const userData = await userService.getUserById(id);
+      console.log('User data received:', userData);
+      
+      if (!userData) {
+        console.error('User data is null or undefined');
+        setError('User not found');
+        setLoading(false);
+        return;
+      }
+      
+      setUser(userData);
+      setError(null);
+      
+      // Initialize editedUser with the fetched user data
+      setEditedUser({
+        ...userData,
+        first_name: userData.name?.split(' ')[0] || '',
+        last_name: userData.name?.split(' ').slice(1).join(' ') || '',
+        status: userData.status || 'active'
+      });
+      
+    } catch (err) {
+      console.error('Failed to fetch user details:', err);
+      setError('Failed to load user details. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Simulate API call to fetch user details
-    const timer = setTimeout(() => {
-      const mockUser = {
-        id,
-        name: 'John Doe',
-        email: 'john.doe@example.com',
-        role: 'Administrator',
-        status: 'active',
-        avatar: null,
-        department: 'IT Operations',
-        position: 'Senior DevOps Engineer',
-        phone: '+1 (555) 123-4567',
-        location: 'San Francisco, CA',
-        createdAt: '2024-01-10T08:30:00Z',
-        lastLogin: '2025-03-14T09:15:22Z',
-        permissions: [
-          'instances:read',
-          'instances:write',
-          'instances:delete',
-          'users:read',
-          'users:write',
-          'settings:read',
-          'settings:write'
-        ]
-      };
-      
-      setUser(mockUser);
-      
-      // Simulate recent activity data
-      setRecentActivity([
-        { 
-          id: 1, 
-          action: 'Created instance', 
-          resource: 'web-server-01', 
-          timestamp: '2025-03-14T08:30:00Z' 
-        },
-        { 
-          id: 2, 
-          action: 'Updated user', 
-          resource: 'jane.smith@example.com', 
-          timestamp: '2025-03-13T14:45:00Z' 
-        },
-        { 
-          id: 3, 
-          action: 'Deleted instance', 
-          resource: 'test-server-03', 
-          timestamp: '2025-03-12T11:20:00Z' 
-        },
-        { 
-          id: 4, 
-          action: 'Modified settings', 
-          resource: 'Notification preferences', 
-          timestamp: '2025-03-10T16:15:00Z' 
-        }
-      ]);
-      
-      setLoading(false);
-    }, 1500);
+    console.log('UserDetail component mounted with ID:', id);
+    fetchUserData();
     
-    return () => clearTimeout(timer);
+    // Cleanup function
+    return () => {
+      console.log('UserDetail component unmounting');
+    };
   }, [id]);
 
   useEffect(() => {
@@ -259,34 +289,108 @@ const UserDetail = () => {
   };
 
   const handleRefresh = () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    fetchUserData();
   };
 
   const handleEditUser = () => {
-    console.log(`Edit user ${id}`);
+    // Set edit mode and initialize editedUser with current user data
+    setEditMode(true);
+    setEditedUser({
+      ...user,
+      first_name: user.name?.split(' ')[0] || '',
+      last_name: user.name?.split(' ').slice(1).join(' ') || ''
+    });
   };
 
-  const handleDeleteUser = () => {
-    console.log(`Delete user ${id}`);
-    navigate('/users');
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setEditedUser(null);
+  };
+
+  const handleSaveUser = async () => {
+    try {
+      setLoading(true);
+      
+      // Prepare update data
+      const updateData = {
+        first_name: editedUser.first_name,
+        last_name: editedUser.last_name,
+        email: editedUser.email,
+        role: editedUser.role,
+        department: editedUser.department,
+        position: editedUser.position,
+        phone: editedUser.phone,
+        location: editedUser.location,
+        is_active: editedUser.status === 'active'
+      };
+      
+      // Update user
+      const updatedUser = await userService.updateUser(id, updateData);
+      
+      // Update local state
+      setUser(updatedUser);
+      setEditMode(false);
+      setEditedUser(null);
+      setSuccessMessage('User updated successfully');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      setError('Failed to update user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditedUser(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleStatusChange = (e) => {
+    setEditedUser(prev => ({
+      ...prev,
+      status: e.target.value
+    }));
+  };
+
+  const handleDeleteUser = async () => {
+    try {
+      setLoading(true);
+      await userService.deleteUser(id);
+      navigate('/users');
+    } catch (err) {
+      console.error(`Failed to delete user ${id}:`, err);
+      setError('Failed to delete user. Please try again.');
+      setLoading(false);
+    }
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch (err) {
+      console.error('Error formatting date:', err);
+      return 'Invalid date';
+    }
   };
 
   const getInitials = (name) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map(part => part[0])
@@ -343,73 +447,23 @@ const UserDetail = () => {
   };
 
   const fetchUserActivity = async () => {
-    if (!user || activityLoading) return;
+    if (!user || activityLoading || !activityHasMore) return;
     
     setActivityLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/users/${id}/activity?page=${activityPage}`);
-      // const data = await response.json();
+      const activityData = await userService.getUserActivity(id, activityPage);
       
-      // Mock data for development
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      if (activityPage === 1) {
+        setRecentActivity(activityData.activities);
+      } else {
+        setRecentActivity(prev => [...prev, ...activityData.activities]);
+      }
       
-      const mockActivity = Array.from({ length: 10 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - Math.floor(i / 2));
-        date.setHours(date.getHours() - (i % 12));
-        
-        const types = ['login', 'logout', 'update', 'create', 'delete', 'permission', 'settings'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        
-        let description = '';
-        switch (type) {
-          case 'login':
-            description = 'Logged in to the system';
-            break;
-          case 'logout':
-            description = 'Logged out of the system';
-            break;
-          case 'update':
-            description = 'Updated profile information';
-            break;
-          case 'create':
-            description = 'Created a new instance';
-            break;
-          case 'delete':
-            description = 'Deleted an instance';
-            break;
-          case 'permission':
-            description = 'Permission settings changed';
-            break;
-          case 'settings':
-            description = 'Updated account settings';
-            break;
-          default:
-            description = 'Performed an action';
-        }
-        
-        return {
-          id: `act-${Date.now()}-${i}`,
-          type,
-          description,
-          timestamp: date.toISOString(),
-          ip: `192.168.1.${Math.floor(Math.random() * 255)}`,
-          details: {
-            browser: 'Chrome',
-            os: 'Windows 10',
-            location: 'New York, USA'
-          }
-        };
-      });
-      
-      setRecentActivity(prev => 
-        activityPage === 1 ? mockActivity : [...prev, ...mockActivity]
-      );
-      setActivityHasMore(activityPage < 3); // Limit to 3 pages for mock data
-      setActivityLoading(false);
-    } catch (error) {
-      console.error('Error fetching user activity:', error);
+      setActivityHasMore(activityData.activities.length > 0 && activityData.pagination.hasNextPage);
+    } catch (err) {
+      console.error('Failed to fetch user activity:', err);
+      setError('Failed to load user activity. Please try again.');
+    } finally {
       setActivityLoading(false);
     }
   };
@@ -620,10 +674,31 @@ const UserDetail = () => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
         <CircularProgress />
+        <Typography variant="body1" sx={{ ml: 2 }}>Loading user data...</Typography>
       </Box>
     );
   }
 
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <Typography variant="h6" color="error" gutterBottom>{error}</Typography>
+        <Button 
+          variant="contained" 
+          onClick={handleBack}
+          sx={{ mt: 2 }}
+        >
+          Back to Users
+        </Button>
+      </Box>
+    );
+  }
+
+  if (!user) {
+    return <UserNotFound id={id} onBack={handleBack} />;
+  }
+
+  // Render the user detail view
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -646,22 +721,43 @@ const UserDetail = () => {
           <IconButton onClick={handleRefresh} sx={{ mr: 1 }}>
             <RefreshIcon />
           </IconButton>
-          <Button 
-            variant="outlined" 
-            startIcon={<EditIcon />}
-            onClick={handleEditUser}
-            sx={{ mr: 1 }}
-          >
-            Edit
-          </Button>
-          <Button 
-            variant="outlined" 
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleDeleteUser}
-          >
-            Delete
-          </Button>
+          {editMode ? (
+            <>
+              <Button 
+                variant="outlined" 
+                onClick={handleCancelEdit}
+                sx={{ mr: 1 }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="contained" 
+                color="primary"
+                onClick={handleSaveUser}
+              >
+                Save Changes
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                variant="outlined" 
+                startIcon={<EditIcon />}
+                onClick={handleEditUser}
+                sx={{ mr: 1 }}
+              >
+                Edit
+              </Button>
+              <Button 
+                variant="outlined" 
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={handleDeleteUser}
+              >
+                Delete
+              </Button>
+            </>
+          )}
         </Box>
       </Box>
       
@@ -682,598 +778,136 @@ const UserDetail = () => {
       </Box>
       
       <TabPanel value={tabValue} index={0}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ mb: 3 }}>
-              <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 3 }}>
-                <Avatar 
-                  sx={{ 
-                    width: 100, 
-                    height: 100, 
-                    mb: 2,
-                    bgcolor: theme.palette.primary.main,
-                    fontSize: '2rem'
-                  }}
-                >
-                  {getInitials(user.name)}
-                </Avatar>
-                <Typography variant="h5" gutterBottom>
-                  {user.name}
-                </Typography>
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {user.email}
-                </Typography>
-                <Chip 
-                  label={user.role} 
-                  color="primary" 
-                  variant="outlined"
-                  sx={{ mt: 1 }}
-                />
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Account Information
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    User ID
-                  </Typography>
-                  <Typography variant="body1">
-                    {user.id}
-                  </Typography>
+        <Typography variant="h6">User Profile</Typography>
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <Avatar 
+                    sx={{ 
+                      width: 100, 
+                      height: 100, 
+                      mb: 2,
+                      bgcolor: theme.palette.primary.main,
+                      fontSize: '2rem'
+                    }}
+                  >
+                    {getInitials(user.name)}
+                  </Avatar>
+                  <Typography variant="h6">{user.name}</Typography>
+                  <Typography variant="body2" color="textSecondary">{user.email}</Typography>
+                  <Chip 
+                    label={user.role} 
+                    color="primary" 
+                    size="small"
+                    sx={{ mt: 1 }}
+                  />
                 </Box>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Status
-                  </Typography>
-                  <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Box 
-                      component="span" 
-                      sx={{ 
-                        display: 'inline-block', 
-                        width: 10, 
-                        height: 10, 
-                        borderRadius: '50%', 
-                        bgcolor: user.status === 'active' ? 'success.main' : 'error.main',
-                        mr: 1
-                      }} 
-                    />
-                    {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Created
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatDate(user.createdAt)}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Last Login
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatDate(user.lastLogin)}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Personal Information
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
+              </Grid>
+              <Grid item xs={12} md={8}>
+                <Typography variant="subtitle1" gutterBottom>User Information</Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Full Name
-                      </Typography>
-                      <Typography variant="body1">
-                        {user.name}
-                      </Typography>
-                    </Box>
-                    
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Email
-                      </Typography>
-                      <Typography variant="body1">
-                        {user.email}
-                      </Typography>
-                    </Box>
-                    
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Phone
-                      </Typography>
-                      <Typography variant="body1">
-                        {user.phone}
-                      </Typography>
-                    </Box>
+                    <Typography variant="body2" color="textSecondary">ID</Typography>
+                    <Typography variant="body1">{user.id}</Typography>
                   </Grid>
-                  
                   <Grid item xs={12} sm={6}>
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Department
-                      </Typography>
-                      <Typography variant="body1">
-                        {user.department}
-                      </Typography>
-                    </Box>
-                    
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Position
-                      </Typography>
-                      <Typography variant="body1">
-                        {user.position}
-                      </Typography>
-                    </Box>
-                    
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Location
-                      </Typography>
-                      <Typography variant="body1">
-                        {user.location}
-                      </Typography>
-                    </Box>
+                    <Typography variant="body2" color="textSecondary">Status</Typography>
+                    <Typography variant="body1">{user.status}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="textSecondary">Role</Typography>
+                    <Typography variant="body1">{user.role}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="textSecondary">Created</Typography>
+                    <Typography variant="body1">{formatDate(user.createdAt)}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="textSecondary">Last Login</Typography>
+                    <Typography variant="body1">{formatDate(user.lastLogin)}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="textSecondary">Department</Typography>
+                    <Typography variant="body1">{user.department || 'N/A'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="textSecondary">Position</Typography>
+                    <Typography variant="body1">{user.position || 'N/A'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="textSecondary">Location</Typography>
+                    <Typography variant="body1">{user.location || 'N/A'}</Typography>
                   </Grid>
                 </Grid>
-              </CardContent>
-            </Card>
-            
-            <Card sx={{ mt: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Recent Activity
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                {renderActivityTab()}
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
       </TabPanel>
       
       <TabPanel value={tabValue} index={1}>
-        {renderPermissionsTab()}
+        <Typography variant="h6">User Permissions</Typography>
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="body1">Permission management is under development.</Typography>
+          </CardContent>
+        </Card>
       </TabPanel>
       
       <TabPanel value={tabValue} index={2}>
-        {renderActivityTab()}
+        <Typography variant="h6">User Activity</Typography>
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="body1">Activity log is under development.</Typography>
+          </CardContent>
+        </Card>
       </TabPanel>
       
       <TabPanel value={tabValue} index={3}>
-        <Card>
+        <Typography variant="h6">User Settings</Typography>
+        <Card sx={{ mt: 2 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              User Settings
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined" sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Account Settings
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>Email Notifications</InputLabel>
-                          <Select
-                            value="all"
-                            label="Email Notifications"
-                          >
-                            <MenuItem value="all">All Notifications</MenuItem>
-                            <MenuItem value="important">Important Only</MenuItem>
-                            <MenuItem value="none">None</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>Two-Factor Authentication</InputLabel>
-                          <Select
-                            value="disabled"
-                            label="Two-Factor Authentication"
-                          >
-                            <MenuItem value="disabled">Disabled</MenuItem>
-                            <MenuItem value="app">Authenticator App</MenuItem>
-                            <MenuItem value="sms">SMS</MenuItem>
-                            <MenuItem value="email">Email</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Session Timeout (30 minutes)"
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-                
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Interface Settings
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>Theme</InputLabel>
-                          <Select
-                            value="dark"
-                            label="Theme"
-                          >
-                            <MenuItem value="light">Light</MenuItem>
-                            <MenuItem value="dark">Dark</MenuItem>
-                            <MenuItem value="system">System Default</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>Default Page</InputLabel>
-                          <Select
-                            value="dashboard"
-                            label="Default Page"
-                          >
-                            <MenuItem value="dashboard">Dashboard</MenuItem>
-                            <MenuItem value="instances">Instances</MenuItem>
-                            <MenuItem value="users">Users</MenuItem>
-                            <MenuItem value="events">Events</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Enable Animations"
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined" sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Password
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>Current Password</InputLabel>
-                          <Select
-                            value="********"
-                            label="Current Password"
-                          >
-                            <MenuItem value="********">********</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>New Password</InputLabel>
-                          <Select
-                            value=""
-                            label="New Password"
-                          >
-                            <MenuItem value=""><em>Enter new password</em></MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small">
-                          <InputLabel>Confirm New Password</InputLabel>
-                          <Select
-                            value=""
-                            label="Confirm New Password"
-                          >
-                            <MenuItem value=""><em>Confirm new password</em></MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                          <Button variant="contained" color="primary" size="small">
-                            Change Password
-                          </Button>
-                        </Box>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-                
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Timezone & Language
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small" sx={{ mb: 2 }}>
-                          <InputLabel>Timezone</InputLabel>
-                          <Select
-                            value="UTC"
-                            label="Timezone"
-                          >
-                            <MenuItem value="UTC">UTC</MenuItem>
-                            <MenuItem value="America/New_York">Eastern Time (ET)</MenuItem>
-                            <MenuItem value="America/Chicago">Central Time (CT)</MenuItem>
-                            <MenuItem value="America/Denver">Mountain Time (MT)</MenuItem>
-                            <MenuItem value="America/Los_Angeles">Pacific Time (PT)</MenuItem>
-                            <MenuItem value="Europe/London">London (GMT)</MenuItem>
-                            <MenuItem value="Europe/Paris">Paris (CET)</MenuItem>
-                            <MenuItem value="Asia/Tokyo">Tokyo (JST)</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small">
-                          <InputLabel>Language</InputLabel>
-                          <Select
-                            value="en"
-                            label="Language"
-                          >
-                            <MenuItem value="en">English</MenuItem>
-                            <MenuItem value="es">Spanish</MenuItem>
-                            <MenuItem value="fr">French</MenuItem>
-                            <MenuItem value="de">German</MenuItem>
-                            <MenuItem value="ja">Japanese</MenuItem>
-                            <MenuItem value="zh">Chinese</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  <Button variant="outlined" sx={{ mr: 2 }}>
-                    Cancel
-                  </Button>
-                  <Button variant="contained" color="primary">
-                    Save Changes
-                  </Button>
-                </Box>
-              </Grid>
-            </Grid>
+            <Typography variant="body1">Settings management is under development.</Typography>
           </CardContent>
         </Card>
       </TabPanel>
       
       <TabPanel value={tabValue} index={4}>
-        <Card>
+        <Typography variant="h6">API Keys</Typography>
+        <Card sx={{ mt: 2 }}>
           <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
-                API Keys
-              </Typography>
-              <Button 
-                variant="contained" 
-                color="primary" 
-                startIcon={<ApiKeyIcon />}
-              >
-                Generate New Key
-              </Button>
-            </Box>
-            <Divider sx={{ mb: 3 }} />
-            
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Card variant="outlined" sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      API Access
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" paragraph>
-                      API keys allow you to authenticate with the InfraControl API. Keep your API keys secure and never share them publicly.
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Enable API Access"
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <FormControl fullWidth variant="outlined" size="small">
-                          <InputLabel>API Rate Limit</InputLabel>
-                          <Select
-                            value="1000"
-                            label="API Rate Limit"
-                          >
-                            <MenuItem value="100">100 requests per minute</MenuItem>
-                            <MenuItem value="500">500 requests per minute</MenuItem>
-                            <MenuItem value="1000">1000 requests per minute</MenuItem>
-                            <MenuItem value="5000">5000 requests per minute</MenuItem>
-                            <MenuItem value="unlimited">Unlimited</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Active API Keys
-                </Typography>
-                <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-                  <Box sx={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Name</th>
-                          <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Key Prefix</th>
-                          <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Created</th>
-                          <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Last Used</th>
-                          <th style={{ padding: '16px', textAlign: 'left', borderBottom: `1px solid ${theme.palette.divider}` }}>Status</th>
-                          <th style={{ padding: '16px', textAlign: 'right', borderBottom: `1px solid ${theme.palette.divider}` }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { 
-                            name: 'Production API Key', 
-                            prefix: 'ic_prod_', 
-                            created: '2024-03-10', 
-                            lastUsed: '2024-03-14', 
-                            status: 'active' 
-                          },
-                          { 
-                            name: 'Development API Key', 
-                            prefix: 'ic_dev_', 
-                            created: '2024-03-11', 
-                            lastUsed: '2024-03-13', 
-                            status: 'active' 
-                          },
-                          { 
-                            name: 'Testing API Key', 
-                            prefix: 'ic_test_', 
-                            created: '2024-03-12', 
-                            lastUsed: '2024-03-12', 
-                            status: 'active' 
-                          },
-                          { 
-                            name: 'Backup API Key', 
-                            prefix: 'ic_backup_', 
-                            created: '2024-03-13', 
-                            lastUsed: 'Never', 
-                            status: 'inactive' 
-                          },
-                        ].map((key, index) => (
-                          <tr key={index} style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-                            <td style={{ padding: '16px' }}>{key.name}</td>
-                            <td style={{ padding: '16px' }}>{key.prefix}***************</td>
-                            <td style={{ padding: '16px' }}>{key.created}</td>
-                            <td style={{ padding: '16px' }}>{key.lastUsed}</td>
-                            <td style={{ padding: '16px' }}>
-                              <Chip 
-                                label={key.status} 
-                                size="small"
-                                color={key.status === 'active' ? 'success' : 'default'}
-                              />
-                            </td>
-                            <td style={{ padding: '16px', textAlign: 'right' }}>
-                              <Button 
-                                variant="outlined" 
-                                size="small" 
-                                sx={{ mr: 1 }}
-                                color={key.status === 'active' ? 'warning' : 'success'}
-                              >
-                                {key.status === 'active' ? 'Disable' : 'Enable'}
-                              </Button>
-                              <Button 
-                                variant="outlined" 
-                                color="error" 
-                                size="small"
-                              >
-                                Revoke
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </Box>
-                </Paper>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Card variant="outlined" sx={{ mt: 3 }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      API Key Permissions
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" paragraph>
-                      Configure the default permissions for new API keys. Individual key permissions can be modified after creation.
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Read Instances"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Modify Instances"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={false} color="primary" />}
-                          label="Delete Instances"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Read Users"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={false} color="primary" />}
-                          label="Modify Users"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={false} color="primary" />}
-                          label="Delete Users"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={true} color="primary" />}
-                          label="Read Events"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <FormControlLabel
-                          control={<Switch checked={false} color="primary" />}
-                          label="Modify Settings"
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
+            <Typography variant="body1">API key management is under development.</Typography>
           </CardContent>
         </Card>
       </TabPanel>
+      
+      {error && (
+        <Snackbar 
+          open={!!error} 
+          autoHideDuration={6000} 
+          onClose={() => setError(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+            {error}
+          </Alert>
+        </Snackbar>
+      )}
+      
+      {successMessage && (
+        <Snackbar 
+          open={!!successMessage} 
+          autoHideDuration={3000} 
+          onClose={() => setSuccessMessage(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+            {successMessage}
+          </Alert>
+        </Snackbar>
+      )}
     </Box>
   );
 };

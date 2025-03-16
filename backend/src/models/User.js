@@ -149,19 +149,29 @@ const User = {
   
   // Create a new user
   create: async (userData) => {
-    const { username, email, password, first_name, last_name, role = 'user' } = userData;
+    const { username, email, password, first_name, last_name, role = 'user', settings } = userData;
     
     // Hash the password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     
-    const query = `
-      INSERT INTO users (username, email, password, first_name, last_name, role)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, username, email, first_name, last_name, role, is_active, created_at
-    `;
+    let query, values;
     
-    const values = [username, email, hashedPassword, first_name, last_name, role];
+    if (settings) {
+      query = `
+        INSERT INTO users (username, email, password, first_name, last_name, role, settings)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, username, email, first_name, last_name, role, is_active, created_at, settings
+      `;
+      values = [username, email, hashedPassword, first_name, last_name, role, JSON.stringify(settings)];
+    } else {
+      query = `
+        INSERT INTO users (username, email, password, first_name, last_name, role)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, username, email, first_name, last_name, role, is_active, created_at
+      `;
+      values = [username, email, hashedPassword, first_name, last_name, role];
+    }
     
     try {
       const result = await pgPool.query(query, values);
@@ -181,8 +191,18 @@ const User = {
     // Build the SET clause for the update query
     Object.entries(updateData).forEach(([key, value]) => {
       if (allowedFields.includes(key)) {
-        values.push(value);
-        updates.push(`${key} = $${values.length}`);
+        // Handle JSON fields
+        if (key === 'settings' && typeof value === 'object') {
+          values.push(JSON.stringify(value));
+        } else {
+          values.push(value);
+        }
+        
+        if (key === 'settings') {
+          updates.push(`${key} = $${values.length}::jsonb`);
+        } else {
+          updates.push(`${key} = $${values.length}`);
+        }
       }
     });
     
@@ -201,7 +221,7 @@ const User = {
       UPDATE users
       SET ${updates.join(', ')}
       WHERE id = $${values.length}
-      RETURNING id, username, email, first_name, last_name, role, is_active, created_at, updated_at
+      RETURNING id, username, email, first_name, last_name, role, is_active, created_at, updated_at, settings
     `;
     
     try {

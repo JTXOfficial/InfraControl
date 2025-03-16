@@ -16,6 +16,8 @@ const { initializeModels } = require('./models');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user.routes');
 const instanceRoutes = require('./routes/instance.routes');
+const projectRoutes = require('./routes/project.routes');
+const zoneRoutes = require('./routes/zone.routes');
 
 // Create Express app
 const app = express();
@@ -35,6 +37,8 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/instances', instanceRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/zones', zoneRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

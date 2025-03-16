@@ -1,14 +1,16 @@
 /**
- * Service Registry
- * Central point to access all microservices
+ * Services Index
+ * Exports all services
  */
 
-const instanceService = require('./instanceService');
 const userService = require('./userService');
-const eventService = require('./eventService');
+const instanceService = require('./instanceService');
+const projectService = require('./projectService');
+const zoneService = require('./zoneService');
 
 module.exports = {
-  instanceService,
   userService,
-  eventService
+  instanceService,
+  projectService,
+  zoneService
 }; 

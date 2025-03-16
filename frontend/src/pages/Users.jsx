@@ -19,7 +19,11 @@ import {
   Button,
   Chip,
   Avatar,
-  useTheme
+  useTheme,
+  Snackbar,
+  Alert,
+  Switch,
+  Tooltip
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -30,6 +34,7 @@ import {
   Email as EmailIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import userService from '../services/userService';
 
 const Users = () => {
   const theme = useTheme();
@@ -37,54 +42,24 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState(null);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const fetchedUsers = await userService.getAllUsers();
+      setUsers(fetchedUsers);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+      setError('Failed to load users. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      const mockUsers = [
-        { 
-          id: '1', 
-          name: 'Admin User', 
-          email: 'admin@example.com',
-          role: 'admin',
-          status: 'active',
-          lastLogin: '2025-03-14T02:06:55Z',
-          createdAt: '2025-01-01T00:00:00Z'
-        },
-        { 
-          id: '2', 
-          name: 'John Doe', 
-          email: 'john.doe@example.com',
-          role: 'user',
-          status: 'active',
-          lastLogin: '2025-03-13T15:30:56Z',
-          createdAt: '2025-01-15T00:00:00Z'
-        },
-        { 
-          id: '3', 
-          name: 'Jane Smith', 
-          email: 'jane.smith@example.com',
-          role: 'user',
-          status: 'active',
-          lastLogin: '2025-03-12T09:45:22Z',
-          createdAt: '2025-02-01T00:00:00Z'
-        },
-        { 
-          id: '4', 
-          name: 'Bob Johnson', 
-          email: 'bob.johnson@example.com',
-          role: 'user',
-          status: 'inactive',
-          lastLogin: '2025-02-28T14:22:10Z',
-          createdAt: '2025-02-15T00:00:00Z'
-        }
-      ];
-      
-      setUsers(mockUsers);
-      setLoading(false);
-    }, 1500);
-    
-    return () => clearTimeout(timer);
+    fetchUsers();
   }, []);
 
   const handleSearchChange = (event) => {
@@ -92,24 +67,50 @@ const Users = () => {
   };
 
   const handleRefresh = () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    fetchUsers();
   };
 
   const handleAddUser = () => {
-    // Navigate to user creation page or open modal
-    console.log('Add user clicked');
+    // Navigate to user creation page
+    navigate('/users/create');
   };
 
   const handleEditUser = (id) => {
     navigate(`/users/${id}`);
   };
 
-  const handleDeleteUser = (id) => {
-    console.log(`Delete user ${id}`);
+  const handleDeleteUser = async (id) => {
+    try {
+      setLoading(true);
+      await userService.deleteUser(id);
+      // Refresh the user list after deletion
+      fetchUsers();
+    } catch (err) {
+      console.error(`Failed to delete user ${id}:`, err);
+      setError('Failed to delete user. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handleToggleStatus = async (user) => {
+    try {
+      setLoading(true);
+      
+      // Prepare update data with toggled status
+      const updateData = {
+        is_active: user.status === 'active' ? false : true
+      };
+      
+      // Update user
+      await userService.updateUser(user.id, updateData);
+      
+      // Refresh the user list
+      fetchUsers();
+    } catch (err) {
+      console.error(`Failed to update status for user ${user.id}:`, err);
+      setError(`Failed to update status for ${user.name}. Please try again.`);
+      setLoading(false);
+    }
   };
 
   // Filter users based on search query
@@ -143,6 +144,7 @@ const Users = () => {
   };
 
   const getInitials = (name) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map(part => part[0])
@@ -152,14 +154,20 @@ const Users = () => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch (err) {
+      console.error('Error formatting date:', err);
+      return 'Invalid date';
+    }
   };
 
   return (
@@ -268,15 +276,26 @@ const Users = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={user.status} 
-                        size="small"
-                        sx={{ 
-                          bgcolor: `${getStatusColor(user.status)}20`,
-                          color: getStatusColor(user.status),
-                          fontWeight: 500
-                        }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Tooltip title={`Click to ${user.status === 'active' ? 'deactivate' : 'activate'} user`}>
+                          <Switch
+                            checked={user.status === 'active'}
+                            onChange={() => handleToggleStatus(user)}
+                            size="small"
+                            color="success"
+                            sx={{ mr: 1 }}
+                          />
+                        </Tooltip>
+                        <Chip 
+                          label={user.status} 
+                          size="small"
+                          sx={{ 
+                            bgcolor: `${getStatusColor(user.status)}20`,
+                            color: getStatusColor(user.status),
+                            fontWeight: 500
+                          }}
+                        />
+                      </Box>
                     </TableCell>
                     <TableCell>{formatDate(user.lastLogin)}</TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
@@ -303,6 +322,19 @@ const Users = () => {
           </Table>
         </TableContainer>
       </Card>
+      
+      {error && (
+        <Snackbar 
+          open={!!error} 
+          autoHideDuration={6000} 
+          onClose={() => setError(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+            {error}
+          </Alert>
+        </Snackbar>
+      )}
     </Box>
   );
 };

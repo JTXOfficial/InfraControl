@@ -64,6 +64,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
+import instanceService from '../services/instanceService';
 
 // Mock data for resource usage chart
 const generateResourceData = (days = 7) => {
@@ -147,72 +148,23 @@ const Dashboard = () => {
   const projects = ['Default', 'e-commerce', 'test-project'];
   const zones = ['Default', 'us-west1-a', 'us-east1-b'];
   
-  const fetchDashboardData = () => {
+  const fetchDashboardData = async () => {
     setRefreshing(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setStats({
-        instances: 4,
-        cpuUsage: 45,
-        memoryUsage: 62,
-        alerts: 3
-      });
+    try {
+      // Fetch instances from the API
+      const instancesData = await instanceService.getAllInstances();
+      setInstances(instancesData);
       
-      setInstances([
-        { 
-          id: '1', 
-          name: 'web-server-01', 
-          url: 'https://web01.example.com',
-          type: 'web-server', 
-          status: 'running',
-          project: 'e-commerce',
-          zone: 'us-west1-a',
-          ip: '10.0.0.1231',
-          cpu: 4,
-          memory: '8.0 GB',
-          disk: '50 GB'
-        },
-        { 
-          id: '2', 
-          name: 'web-server-123', 
-          url: 'https://web01.example.com',
-          type: 'web-server', 
-          status: 'running',
-          project: 'e-commerce',
-          zone: 'us-west1-a',
-          ip: '10.0.0.123',
-          cpu: 4,
-          memory: '8.0 GB',
-          disk: '50 GB'
-        },
-        { 
-          id: '3', 
-          name: 'test-name', 
-          url: 'http://localhost',
-          type: 'app-server', 
-          status: 'running',
-          project: 'test-project',
-          zone: 'us-east1-b',
-          ip: '127.0.0.1',
-          cpu: 1,
-          memory: '1.0 GB',
-          disk: '10 GB'
-        },
-        { 
-          id: '4', 
-          name: 'Unknown', 
-          url: '',
-          type: 'N/A', 
-          status: 'unknown',
-          project: 'Default',
-          zone: 'Default',
-          ip: '10.0.0.123123123',
-          cpu: 'N/A',
-          memory: 'N/A',
-          disk: 'N/A'
-        }
-      ]);
+      // Calculate stats based on real data
+      const stats = {
+        instances: instancesData.length,
+        cpuUsage: calculateAverageCpuUsage(instancesData),
+        memoryUsage: calculateAverageMemoryUsage(instancesData),
+        alerts: alerts.length
+      };
+      
+      setStats(stats);
       
       // Generate resource data based on selected time range
       const days = timeRange === '24h' ? 1 : 
@@ -221,10 +173,46 @@ const Dashboard = () => {
       
       setResourceData(generateResourceData(days));
       setAlerts(generateAlerts());
-      
-      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      // Show error notification or message to user
+    } finally {
       setRefreshing(false);
-    }, 1000);
+    }
+  };
+  
+  // Helper function to calculate average CPU usage
+  const calculateAverageCpuUsage = (instances) => {
+    if (!instances || instances.length === 0) return 0;
+    
+    const validInstances = instances.filter(instance => 
+      instance.metrics && typeof instance.metrics.cpu === 'number'
+    );
+    
+    if (validInstances.length === 0) return 0;
+    
+    const totalCpuUsage = validInstances.reduce((sum, instance) => 
+      sum + instance.metrics.cpu, 0
+    );
+    
+    return Math.round(totalCpuUsage / validInstances.length);
+  };
+  
+  // Helper function to calculate average memory usage
+  const calculateAverageMemoryUsage = (instances) => {
+    if (!instances || instances.length === 0) return 0;
+    
+    const validInstances = instances.filter(instance => 
+      instance.metrics && typeof instance.metrics.memory === 'number'
+    );
+    
+    if (validInstances.length === 0) return 0;
+    
+    const totalMemoryUsage = validInstances.reduce((sum, instance) => 
+      sum + instance.metrics.memory, 0
+    );
+    
+    return Math.round(totalMemoryUsage / validInstances.length);
   };
   
   useEffect(() => {

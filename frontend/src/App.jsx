@@ -19,6 +19,9 @@ import Users from './pages/Users';
 import InstanceDetail from './pages/InstanceDetail';
 import InstanceCreate from './pages/InstanceCreate';
 import UserDetail from './pages/UserDetail';
+import UserCreate from './pages/UserCreate';
+import Projects from './pages/Projects';
+import Zones from './pages/Zones';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 
@@ -88,7 +91,10 @@ const AppRoutes = () => {
         <Route path="/instances/create" element={<InstanceCreate />} />
         <Route path="/instances/:id" element={<InstanceDetail />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/users/create" element={<UserCreate />} />
         <Route path="/users/:id" element={<UserDetail />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/zones" element={<Zones />} />
         <Route path="/events" element={<Events />} />
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/event-stream" element={<EventStream />} />
