@@ -32,7 +32,9 @@ import {
   FormControlLabel,
   Menu,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Badge,
+  Alert
 } from '@mui/material';
 import {
   Storage as StorageIcon,
@@ -64,7 +66,8 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import instanceService from '../services/instanceService';
+import dashboardService from '../services/dashboardService';
+import { useNotifications } from '../contexts/NotificationContext';
 
 // Mock data for resource usage chart
 const generateResourceData = (days = 7) => {
@@ -121,98 +124,64 @@ const Dashboard = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(30); // seconds
   const autoRefreshTimerRef = useRef(null);
+  const { createTaskCompletionNotification } = useNotifications?.() || {};
+  
+  // Dashboard state
+  const [dashboardData, setDashboardData] = useState({
+    instances: [],
+    stats: {
+      instances: 0,
+      cpuUsage: 0,
+      memoryUsage: 0,
+      alerts: 0
+    },
+    alerts: [],
+    resourceData: []
+  });
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState('All Projects');
   const [selectedZone, setSelectedZone] = useState('All Zones');
   const [timeRange, setTimeRange] = useState('7d');
+  const [error, setError] = useState(null);
   
   // Menu states
   const [filterMenuAnchor, setFilterMenuAnchor] = useState(null);
   const [timeRangeMenuAnchor, setTimeRangeMenuAnchor] = useState(null);
   const [refreshMenuAnchor, setRefreshMenuAnchor] = useState(null);
   
-  // Mock data - will be replaced with API calls
-  const [stats, setStats] = useState({
-    instances: 0,
-    cpuUsage: 0,
-    memoryUsage: 0,
-    alerts: 0
-  });
-
-  const [instances, setInstances] = useState([]);
-  const [resourceData, setResourceData] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  
-  const projects = ['Default', 'e-commerce', 'test-project'];
-  const zones = ['Default', 'us-west1-a', 'us-east1-b'];
+  // Projects and zones data
+  const [projects, setProjects] = useState(['Default', 'e-commerce', 'test-project']);
+  const [zones, setZones] = useState(['Default', 'us-west1-a', 'us-east1-b']);
   
   const fetchDashboardData = async () => {
     setRefreshing(true);
+    setError(null);
     
     try {
-      // Fetch instances from the API
-      const instancesData = await instanceService.getAllInstances();
-      setInstances(instancesData);
+      // Fetch dashboard data from service
+      const data = await dashboardService.getDashboardData({
+        timeRange,
+        project: selectedProject !== 'All Projects' ? selectedProject : undefined,
+        zone: selectedZone !== 'All Zones' ? selectedZone : undefined,
+        search: searchQuery || undefined
+      });
       
-      // Calculate stats based on real data
-      const stats = {
-        instances: instancesData.length,
-        cpuUsage: calculateAverageCpuUsage(instancesData),
-        memoryUsage: calculateAverageMemoryUsage(instancesData),
-        alerts: alerts.length
-      };
+      // Update dashboard state with fetched data
+      setDashboardData(data);
       
-      setStats(stats);
-      
-      // Generate resource data based on selected time range
-      const days = timeRange === '24h' ? 1 : 
-                  timeRange === '7d' ? 7 : 
-                  timeRange === '30d' ? 30 : 7;
-      
-      setResourceData(generateResourceData(days));
-      setAlerts(generateAlerts());
+      // If this is a manual refresh, show notification
+      if (refreshing && !loading && createTaskCompletionNotification) {
+        createTaskCompletionNotification('Dashboard data refreshed successfully');
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      // Show error notification or message to user
+      setError('Failed to load dashboard data. Please try again.');
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
-  };
-  
-  // Helper function to calculate average CPU usage
-  const calculateAverageCpuUsage = (instances) => {
-    if (!instances || instances.length === 0) return 0;
-    
-    const validInstances = instances.filter(instance => 
-      instance.metrics && typeof instance.metrics.cpu === 'number'
-    );
-    
-    if (validInstances.length === 0) return 0;
-    
-    const totalCpuUsage = validInstances.reduce((sum, instance) => 
-      sum + instance.metrics.cpu, 0
-    );
-    
-    return Math.round(totalCpuUsage / validInstances.length);
-  };
-  
-  // Helper function to calculate average memory usage
-  const calculateAverageMemoryUsage = (instances) => {
-    if (!instances || instances.length === 0) return 0;
-    
-    const validInstances = instances.filter(instance => 
-      instance.metrics && typeof instance.metrics.memory === 'number'
-    );
-    
-    if (validInstances.length === 0) return 0;
-    
-    const totalMemoryUsage = validInstances.reduce((sum, instance) => 
-      sum + instance.metrics.memory, 0
-    );
-    
-    return Math.round(totalMemoryUsage / validInstances.length);
   };
   
   useEffect(() => {
@@ -224,7 +193,7 @@ const Dashboard = () => {
         clearInterval(autoRefreshTimerRef.current);
       }
     };
-  }, [timeRange]);
+  }, [timeRange, selectedProject, selectedZone]);
   
   // Set up auto-refresh
   useEffect(() => {
@@ -267,6 +236,12 @@ const Dashboard = () => {
     setSearchQuery(event.target.value);
   };
   
+  const handleSearchSubmit = (event) => {
+    if (event.key === 'Enter') {
+      fetchDashboardData();
+    }
+  };
+  
   const handleProjectChange = (event) => {
     setSelectedProject(event.target.value);
   };
@@ -283,12 +258,17 @@ const Dashboard = () => {
     navigate(`/instances/${id}`);
   };
   
+  const handleDeleteInstance = (id) => {
+    // In a real app, you would confirm deletion first
+    console.log(`Delete instance ${id}`);
+  };
+  
   // Filter instances based on search query and selected filters
-  const filteredInstances = instances.filter(instance => {
+  const filteredInstances = dashboardData.instances.filter(instance => {
     const matchesSearch = 
       searchQuery === '' || 
-      instance.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      instance.ip.toLowerCase().includes(searchQuery.toLowerCase());
+      instance.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      instance.ip?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesProject = 
       selectedProject === 'All Projects' || 
@@ -328,7 +308,7 @@ const Dashboard = () => {
   );
 
   const getStatusColor = (status) => {
-    switch(status.toLowerCase()) {
+    switch(status?.toLowerCase()) {
       case 'running':
         return 'success';
       case 'stopped':
@@ -341,7 +321,7 @@ const Dashboard = () => {
   };
   
   const getSeverityColor = (severity) => {
-    switch(severity.toLowerCase()) {
+    switch(severity?.toLowerCase()) {
       case 'critical':
         return theme.palette.error.main;
       case 'warning':
@@ -470,7 +450,11 @@ const Dashboard = () => {
               disabled={refreshing}
               sx={{ mr: 1 }}
             >
-              <RefreshIcon />
+              {refreshing ? (
+                <CircularProgress size={24} />
+              ) : (
+                <RefreshIcon />
+              )}
             </IconButton>
           </Tooltip>
           
@@ -484,11 +468,17 @@ const Dashboard = () => {
         </Box>
       </Box>
       
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+      
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard 
             title="Total Instances" 
-            value={stats.instances} 
+            value={dashboardData.stats.instances} 
             icon={<StorageIcon sx={{ color: theme.palette.primary.light }} />}
             color="primary"
           />
@@ -496,7 +486,7 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard 
             title="CPU Usage" 
-            value={`${stats.cpuUsage}%`} 
+            value={`${dashboardData.stats.cpuUsage}%`} 
             icon={<MemoryIcon sx={{ color: theme.palette.info.light }} />}
             color="info"
           />
@@ -504,7 +494,7 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard 
             title="Memory Usage" 
-            value={`${stats.memoryUsage}%`} 
+            value={`${dashboardData.stats.memoryUsage}%`} 
             icon={<NetworkIcon sx={{ color: theme.palette.success.light }} />}
             color="success"
           />
@@ -512,7 +502,7 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard 
             title="Active Alerts" 
-            value={stats.alerts} 
+            value={dashboardData.stats.alerts} 
             icon={<WarningIcon sx={{ color: theme.palette.warning.light }} />}
             color="warning"
           />
@@ -524,6 +514,7 @@ const Dashboard = () => {
           title={
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h6">Instances</Typography>
+              {refreshing && <CircularProgress size={20} sx={{ ml: 2 }} />}
             </Box>
           }
           sx={{ pb: 0 }}
@@ -536,6 +527,7 @@ const Dashboard = () => {
             size="small"
             value={searchQuery}
             onChange={handleSearchChange}
+            onKeyDown={handleSearchSubmit}
             sx={{ flexGrow: 1, minWidth: 200 }}
             InputProps={{
               startAdornment: (
@@ -592,19 +584,20 @@ const Dashboard = () => {
                 <TableCell>CPU</TableCell>
                 <TableCell>Memory</TableCell>
                 <TableCell>Disk</TableCell>
+                <TableCell>Status</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
                     <CircularProgress size={24} />
                   </TableCell>
                 </TableRow>
               ) : filteredInstances.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
                     <Typography variant="body2" color="text.secondary">
                       No instances found
                     </Typography>
@@ -625,13 +618,20 @@ const Dashboard = () => {
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell>{instance.project}</TableCell>
-                    <TableCell>{instance.zone}</TableCell>
-                    <TableCell>{instance.ip}</TableCell>
-                    <TableCell>{instance.type}</TableCell>
-                    <TableCell>{instance.cpu}</TableCell>
-                    <TableCell>{instance.memory}</TableCell>
-                    <TableCell>{instance.disk}</TableCell>
+                    <TableCell>{instance.project || '-'}</TableCell>
+                    <TableCell>{instance.zone || instance.region || '-'}</TableCell>
+                    <TableCell>{instance.ip || instance.ip_address || '-'}</TableCell>
+                    <TableCell>{instance.type || instance.instance_type || '-'}</TableCell>
+                    <TableCell>{instance.cpu || '-'}</TableCell>
+                    <TableCell>{instance.memory || '-'}</TableCell>
+                    <TableCell>{instance.disk || '-'}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={instance.status || 'Unknown'} 
+                        size="small" 
+                        color={getStatusColor(instance.status)}
+                      />
+                    </TableCell>
                     <TableCell align="right">
                       <IconButton 
                         size="small" 
@@ -640,7 +640,11 @@ const Dashboard = () => {
                       >
                         <EditIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" color="error">
+                      <IconButton 
+                        size="small" 
+                        color="error"
+                        onClick={() => handleDeleteInstance(instance.id)}
+                      >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
@@ -674,7 +678,7 @@ const Dashboard = () => {
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
-                    data={resourceData}
+                    data={dashboardData.resourceData}
                     margin={{
                       top: 10,
                       right: 30,
@@ -719,7 +723,16 @@ const Dashboard = () => {
         </Grid>
         <Grid item xs={12} md={4}>
           <Card sx={{ height: '100%' }}>
-            <CardHeader title="Recent Alerts" />
+            <CardHeader 
+              title={
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="h6">Recent Alerts</Typography>
+                  <Badge badgeContent={dashboardData.alerts.length} color="error">
+                    <WarningIcon color="action" />
+                  </Badge>
+                </Box>
+              } 
+            />
             <Divider />
             <CardContent sx={{ maxHeight: 300, overflow: 'auto' }}>
               {loading ? (
@@ -727,9 +740,9 @@ const Dashboard = () => {
                   <CircularProgress />
                 </Box>
               ) : (
-                alerts.length > 0 ? (
+                dashboardData.alerts.length > 0 ? (
                   <Box>
-                    {alerts.map(alert => (
+                    {dashboardData.alerts.map(alert => (
                       <Box 
                         key={alert.id} 
                         sx={{ 
@@ -755,7 +768,9 @@ const Dashboard = () => {
                     ))}
                   </Box>
                 ) : (
-                  <Typography>No active alerts</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 100 }}>
+                    <Typography variant="body2" color="text.secondary">No active alerts</Typography>
+                  </Box>
                 )
               )}
             </CardContent>
