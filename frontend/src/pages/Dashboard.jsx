@@ -67,27 +67,9 @@ import {
   Area
 } from 'recharts';
 import dashboardService from '../services/dashboardService';
+import projectService from '../services/projectService';
+import zoneService from '../services/zoneService';
 import { useNotifications } from '../contexts/NotificationContext';
-
-// Mock data for resource usage chart
-const generateResourceData = (days = 7) => {
-  const data = [];
-  const now = new Date();
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      cpu: Math.floor(Math.random() * 40) + 20, // Random between 20-60%
-      memory: Math.floor(Math.random() * 30) + 40, // Random between 40-70%
-      disk: Math.floor(Math.random() * 20) + 10, // Random between 10-30%
-    });
-  }
-  
-  return data;
-};
 
 // Mock data for alerts
 const generateAlerts = () => {
@@ -139,6 +121,38 @@ const Dashboard = () => {
     resourceData: []
   });
   
+  // Get the most recent resource usage data
+  const getCurrentResourceUsage = () => {
+    if (!dashboardData.resourceData || dashboardData.resourceData.length === 0) {
+      return { cpu: 0, memory: 0, disk: 0 };
+    }
+    return dashboardData.resourceData[dashboardData.resourceData.length - 1];
+  };
+  
+  // Get average resource usage from the resource data
+  const getAverageResourceUsage = () => {
+    if (!dashboardData.resourceData || dashboardData.resourceData.length === 0) {
+      return { cpu: 0, memory: 0, disk: 0 };
+    }
+    const sum = dashboardData.resourceData.reduce(
+      (acc, item) => {
+        return {
+          cpu: acc.cpu + (item.cpu || 0),
+          memory: acc.memory + (item.memory || 0),
+          disk: acc.disk + (item.disk || 0)
+        };
+      },
+      { cpu: 0, memory: 0, disk: 0 }
+    );
+    
+    const count = dashboardData.resourceData.length;
+    return {
+      cpu: Math.round(sum.cpu / count),
+      memory: Math.round(sum.memory / count),
+      disk: Math.round(sum.disk / count)
+    };
+  };
+  
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState('All Projects');
@@ -152,8 +166,8 @@ const Dashboard = () => {
   const [refreshMenuAnchor, setRefreshMenuAnchor] = useState(null);
   
   // Projects and zones data
-  const [projects, setProjects] = useState(['Default', 'e-commerce', 'test-project']);
-  const [zones, setZones] = useState(['Default', 'us-west1-a', 'us-east1-b']);
+  const [projects, setProjects] = useState([]);
+  const [zones, setZones] = useState([]);
   
   const fetchDashboardData = async () => {
     setRefreshing(true);
@@ -183,8 +197,35 @@ const Dashboard = () => {
       setRefreshing(false);
     }
   };
+
+  // Fetch projects from API
+  const fetchProjects = async () => {
+    try {
+      const projectsData = await projectService.getAllProjects();
+      setProjects(projectsData);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      // Don't set error state here to avoid blocking the main dashboard
+    }
+  };
+  
+  // Fetch zones from API
+  const fetchZones = async () => {
+    try {
+      const zonesData = await zoneService.getAllZones();
+      setZones(zonesData);
+    } catch (error) {
+      console.error('Error fetching zones:', error);
+      // Don't set error state here to avoid blocking the main dashboard
+    }
+  };
   
   useEffect(() => {
+    // Fetch projects and zones on component mount
+    fetchProjects();
+    fetchZones();
+    
+    // Fetch dashboard data
     fetchDashboardData();
     
     // Cleanup function
@@ -353,6 +394,10 @@ const Dashboard = () => {
     }
   };
   
+  // Get current resource usage data
+  const currentResourceUsage = getCurrentResourceUsage();
+  const averageResourceUsage = getAverageResourceUsage();
+  
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -486,7 +531,7 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard 
             title="CPU Usage" 
-            value={`${dashboardData.stats.cpuUsage}%`} 
+            value={`${currentResourceUsage.cpu || dashboardData.stats.cpuUsage}%`} 
             icon={<MemoryIcon sx={{ color: theme.palette.info.light }} />}
             color="info"
           />
@@ -494,7 +539,7 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard 
             title="Memory Usage" 
-            value={`${dashboardData.stats.memoryUsage}%`} 
+            value={`${currentResourceUsage.memory || dashboardData.stats.memoryUsage}%`} 
             icon={<NetworkIcon sx={{ color: theme.palette.success.light }} />}
             color="success"
           />
@@ -549,7 +594,7 @@ const Dashboard = () => {
             >
               <MenuItem value="All Projects">All Projects</MenuItem>
               {projects.map(project => (
-                <MenuItem key={project} value={project}>{project}</MenuItem>
+                <MenuItem key={project.id || project.name} value={project.name || project.id}>{project.name}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -565,7 +610,7 @@ const Dashboard = () => {
             >
               <MenuItem value="All Zones">All Zones</MenuItem>
               {zones.map(zone => (
-                <MenuItem key={zone} value={zone}>{zone}</MenuItem>
+                <MenuItem key={zone.id || zone.name} value={zone.name || zone.id}>{zone.name}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -719,6 +764,11 @@ const Dashboard = () => {
                 </ResponsiveContainer>
               )}
             </CardContent>
+            <Box px={2} pb={2}>
+              <Typography variant="body2" color="text.secondary">
+                Average Usage: CPU {averageResourceUsage.cpu}% | Memory {averageResourceUsage.memory}% | Disk {averageResourceUsage.disk}%
+              </Typography>
+            </Box>
           </Card>
         </Grid>
         <Grid item xs={12} md={4}>
