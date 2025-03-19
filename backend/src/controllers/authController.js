@@ -6,7 +6,7 @@
 const { User } = require('../models');
 const { generateToken, generateRefreshToken } = require('../config/auth');
 const { userService } = require('../services');
-const { eventService } = require('../services');
+const eventService = require('../services/eventService');
 
 /**
  * Login user
