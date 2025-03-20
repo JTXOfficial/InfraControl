@@ -91,14 +91,6 @@ const zoneController = {
         });
       }
       
-      // Validate IP address for self-hosted zones
-      if (req.body.provider === 'SelfHosted' && !req.body.ipAddress) {
-        return res.status(400).json({
-          status: 'fail',
-          message: 'IP address is required for self-hosted zones'
-        });
-      }
-      
       const zoneData = {
         name: req.body.name,
         provider: req.body.provider,
@@ -133,14 +125,6 @@ const zoneController = {
   
   updateZone: async (req, res) => {
     try {
-      // Validate IP address for self-hosted zones
-      if (req.body.provider === 'SelfHosted' && !req.body.ipAddress) {
-        return res.status(400).json({
-          status: 'fail',
-          message: 'IP address is required for self-hosted zones'
-        });
-      }
-      
       const updateData = {
         name: req.body.name,
         provider: req.body.provider,

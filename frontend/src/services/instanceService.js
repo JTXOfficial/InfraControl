@@ -233,6 +233,57 @@ const instanceService = {
       console.error(`Error fetching instance metrics history for ID ${id}:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Fetch system usage data directly from an instance using curl
+   * @param {string} id Instance ID
+   * @returns {Promise<Object>} System usage data
+   */
+  fetchSystemUsage: async (id) => {
+    try {
+      console.log(`Fetching system usage for instance ${id}`);
+      
+      // First get the instance details to get the server IP
+      const instanceDetails = await api.get(`/instances/${id}`);
+      const serverIP = instanceDetails.data.data.instance.ipAddress || instanceDetails.data.data.instance.ip;
+      
+      if (!serverIP) {
+        throw new Error('Server IP address not available');
+      }
+      
+      // Make direct curl request to the instance's system usage endpoint
+      const response = await axios.get(`http://${serverIP}:3000/api/system-usage`, {
+        timeout: 8000, // 8 second timeout for direct connections
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      // Transform the response to match our expected metrics format
+      const rawData = response.data;
+      
+      return {
+        status: 'success',
+        data: {
+          metrics: {
+            cpu: parseFloat(rawData.cpuUsage.replace('%', '')),
+            memory: parseFloat(rawData.memoryUsage.percentUsed),
+            disk: parseFloat(rawData.diskUsage.percentUsed) || 
+                  (rawData.diskUsage.total && rawData.diskUsage.free ? 
+                   ((rawData.diskUsage.total - rawData.diskUsage.free) / rawData.diskUsage.total * 100) : 0),
+            network: {
+              in: 0, // These values aren't provided in the raw data
+              out: 0  // These values aren't provided in the raw data
+            }
+          },
+          raw: rawData // Keep the raw data for reference if needed
+        }
+      };
+    } catch (error) {
+      console.error(`Error fetching system usage for instance ${id}:`, error);
+      throw error;
+    }
   }
 };
 

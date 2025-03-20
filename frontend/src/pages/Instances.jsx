@@ -178,10 +178,82 @@ const Instances = () => {
   const handleRestartInstance = async (id) => {
     try {
       setLoading(true);
+      
+      // Find the instance to restart
+      const instanceToRestart = instances.find(instance => instance.id === id);
+      if (!instanceToRestart) {
+        throw new Error('Instance not found');
+      }
+      
+      // Check if this is a KVM instance (provider is SELFHOSTED)
+      const isKvm = instanceToRestart.provider === 'SELFHOSTED';
+      
+      // Update local state first to show immediate feedback
+      const updatedInstances = instances.map(instance => {
+        if (instance.id === id) {
+          return { ...instance, status: 'restarting' };
+        }
+        return instance;
+      });
+      setInstances(updatedInstances);
+      
+      // Call the API to restart the instance
       await instanceService.restartInstance(id);
-      fetchInstances();
+      
+      // Set up polling to check status
+      let pollingCount = 0;
+      const maxPolls = isKvm ? 40 : 20; // More polling attempts for KVM VMs
+      const pollInterval = isKvm ? 5000 : 3000; // Longer interval for KVM VMs
+      const initialDelay = isKvm ? 15000 : 3000; // Longer initial delay for KVM VMs
+      
+      const checkRestartStatus = async () => {
+        if (pollingCount >= maxPolls) {
+          console.log(`Maximum polling attempts (${maxPolls}) reached for instance ${id}`);
+          fetchInstances(); // Final fetch to get the latest state
+          return;
+        }
+        
+        try {
+          pollingCount++;
+          const instanceData = await instanceService.getInstanceById(id);
+          
+          // Update our local instances with the fetched instance data
+          const updatedInstances = instances.map(instance => {
+            if (instance.id === id) {
+              return { ...instance, status: instanceData.status };
+            }
+            return instance;
+          });
+          setInstances(updatedInstances);
+          
+          console.log(`Poll ${pollingCount}/${maxPolls} for instance ${id}: status = ${instanceData.status}`);
+          
+          // If instance is still restarting, poll again
+          if (instanceData.status === 'restarting') {
+            setTimeout(checkRestartStatus, pollInterval);
+          } else {
+            console.log(`Instance ${id} restart complete, status: ${instanceData.status}`);
+            fetchInstances(); // Refresh all instances to ensure data consistency
+          }
+        } catch (pollError) {
+          console.error(`Error polling instance status during restart: ${pollError}`);
+          // For intermittent errors, continue polling unless we've reached our limit
+          if (pollingCount < maxPolls) {
+            setTimeout(checkRestartStatus, pollInterval);
+          } else {
+            fetchInstances(); // Give up and just refresh all instances
+          }
+        }
+      };
+      
+      // Start polling after a delay to allow the restart to begin
+      console.log(`Waiting ${initialDelay}ms before starting status polls for instance ${id}`);
+      setTimeout(checkRestartStatus, initialDelay);
+      
     } catch (error) {
       console.error('Error restarting instance:', error);
+      // Refresh the instances list to get current status
+      fetchInstances();
     } finally {
       setLoading(false);
     }

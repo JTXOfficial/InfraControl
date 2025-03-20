@@ -248,12 +248,25 @@ const ConsoleTab = ({ instance }) => {
         const sshDetails = response.data.sshConnection;
         
         terminal.writeln(`SSH connection details retrieved successfully`);
-        terminal.writeln(`Host: ${sshDetails.host}`);
+        
+        // Check if this is a KVM VM
+        if (sshDetails.isKvm) {
+          terminal.writeln(`Host: ${sshDetails.host} (KVM Host)`);
+          terminal.writeln(`Target VM: ${sshDetails.vmName}`);
+          if (sshDetails.targetVmIp) {
+            terminal.writeln(`VM IP: ${sshDetails.targetVmIp}`);
+            terminal.writeln(`VM SSH Port: ${sshDetails.targetVmSshPort || 22}`);
+          }
+        } else {
+          terminal.writeln(`Host: ${sshDetails.host}`);
+        }
+        
         terminal.writeln(`Port: ${sshDetails.port}`);
         terminal.writeln(`Username: ${sshDetails.username}`);
         terminal.writeln(`Auth Method: ${sshDetails.authMethod}`);
         terminal.writeln('');
         terminal.writeln('Connecting to WebSocket terminal...');
+        terminal.writeln('Note: If connecting to a KVM VM, you may need to press Enter to see the login prompt.');
         
         // Now connect to the WebSocket terminal
         connectToInstance();
@@ -377,6 +390,11 @@ const ConsoleTab = ({ instance }) => {
           <Typography variant="body2">
             Username: {instance?.config?.sshUser || 'root'}
           </Typography>
+          {instance?.config?.vmName && instance?.config?.kvmHost && (
+            <Typography variant="body2" color="primary">
+              KVM Virtual Machine: {instance.config.vmName} on host {instance.config.kvmHost}
+            </Typography>
+          )}
         </Box>
       </CardContent>
     </Card>

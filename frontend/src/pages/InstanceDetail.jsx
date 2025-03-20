@@ -9,12 +9,17 @@ import {
   CircularProgress,
   Button,
   IconButton,
-  Tooltip
+  Tooltip,
+  Grid
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { format } from 'date-fns';
 import instanceService from '../services/instanceService';
 import { useSnackbar } from 'notistack';
+import { useTheme } from '@mui/material/styles';
+import MemoryIcon from '@mui/icons-material/Memory';
+import StorageIcon from '@mui/icons-material/Storage';
+import SdCardIcon from '@mui/icons-material/SdCard';
 
 // Import components
 import TabPanel from '../components/instance/TabPanel';
@@ -25,6 +30,7 @@ import CurrentUsage from '../components/instance/CurrentUsage';
 import MetricsTab from '../components/instance/MetricsTab';
 import ConsoleTab from '../components/instance/ConsoleTab';
 import SettingsTab from '../components/instance/SettingsTab';
+import MetricCard from '../components/instance/MetricCard';
 
 // Maximum number of metrics data points to store
 const MAX_METRICS_HISTORY = 100;
@@ -48,8 +54,11 @@ const InstanceDetail = () => {
   const [timeRange, setTimeRange] = useState('1h');
   const [activeTab, setActiveTab] = useState(0);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [status, setStatus] = useState('');
   const pollingRef = useRef(null);
   const pollingInterval = 3000; // 3 seconds
+  const theme = useTheme();
+  const [refreshing, setRefreshing] = useState(false);
 
   // Load metrics history from localStorage on component mount
   useEffect(() => {
@@ -57,6 +66,22 @@ const InstanceDetail = () => {
       loadMetricsHistory();
     }
   }, [id]);
+
+  // Add metrics to history
+  const addMetricsToHistory = (newMetrics) => {
+    if (!newMetrics) return;
+    
+    // Add to history with timestamp
+    const timestamp = new Date();
+    setMetricsHistory(prev => {
+      // Keep only the last MAX_METRICS_HISTORY data points to avoid memory issues
+      const newHistory = [...prev, { ...newMetrics, timestamp }];
+      if (newHistory.length > MAX_METRICS_HISTORY) {
+        return newHistory.slice(-MAX_METRICS_HISTORY);
+      }
+      return newHistory;
+    });
+  };
 
   useEffect(() => {
     fetchInstanceDetails();
@@ -218,6 +243,50 @@ const InstanceDetail = () => {
     }
   };
 
+  const fetchInstance = async () => {
+    try {
+      setLoading(true);
+      const data = await instanceService.getInstanceById(id);
+      setInstance(data.instance);
+      // Update current metrics
+      setMetrics(data.instance.metrics);
+      // Add current metrics to history
+      addMetricsToHistory(data.instance.metrics);
+      setStatus(data.instance.status);
+    } catch (error) {
+      console.error('Error fetching instance:', error);
+      enqueueSnackbar('Failed to fetch instance details', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const refreshSystemUsage = async () => {
+    try {
+      setRefreshing(true);
+      
+      // Only fetch for self-hosted instances
+      if (instance?.provider?.toUpperCase() !== 'SELF HOST') {
+        enqueueSnackbar('System usage data can only be fetched for self-hosted instances', { variant: 'warning' });
+        return;
+      }
+      
+      const data = await instanceService.fetchSystemUsage(id);
+      setInstance(data.instance);
+      // Update current metrics
+      setMetrics(data.instance.metrics);
+      // Add current metrics to history
+      addMetricsToHistory(data.instance.metrics);
+      
+      enqueueSnackbar('System usage data refreshed successfully', { variant: 'success' });
+    } catch (error) {
+      console.error('Error refreshing system usage:', error);
+      enqueueSnackbar('Failed to refresh system usage data', { variant: 'error' });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loading && !instance) {
     return (
       <Container maxWidth="lg">
@@ -267,14 +336,36 @@ const InstanceDetail = () => {
             
             <Box sx={{ mt: 3 }}>
               <CurrentUsage 
-                metrics={metrics} 
-                lastUpdated={lastUpdated}
-                onRefresh={fetchInstanceMetrics}
+                instanceId={id}
+                initialMetrics={metrics}
               />
             </Box>
           </TabPanel>
           
           <TabPanel value={activeTab} index={1}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<RefreshIcon />}
+                onClick={fetchInstance}
+                disabled={loading}
+                sx={{ mr: 1 }}
+              >
+                Refresh
+              </Button>
+              {instance?.provider?.toUpperCase() === 'SELF HOST' && (
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  startIcon={<RefreshIcon />}
+                  onClick={refreshSystemUsage}
+                  disabled={refreshing}
+                >
+                  Refresh System Usage
+                </Button>
+              )}
+            </Box>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Button 
                 size="small" 
@@ -285,6 +376,42 @@ const InstanceDetail = () => {
                 Clear History
               </Button>
             </Box>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <MetricCard
+                  title="CPU Usage"
+                  value={`${Math.round(metrics.cpu)}%`}
+                  icon={<MemoryIcon />}
+                  color={theme.palette.primary.main}
+                  progress={metrics.cpu}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <MetricCard
+                  title="Memory Usage"
+                  value={`${Math.round(metrics.memory)}%`}
+                  icon={<StorageIcon />}
+                  color={theme.palette.secondary.main}
+                  progress={metrics.memory}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <MetricCard
+                  title="Disk Usage"
+                  value={`${Math.round(metrics.disk)}%`}
+                  icon={<SdCardIcon />}
+                  color={theme.palette.success.main}
+                  progress={metrics.disk}
+                />
+              </Grid>
+              {metrics.lastUpdated && (
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary" align="right" sx={{ display: 'block', mt: 1 }}>
+                    Last updated: {new Date(metrics.lastUpdated).toLocaleString()}
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
             <MetricsTab 
               instance={instance}
               metrics={metrics}

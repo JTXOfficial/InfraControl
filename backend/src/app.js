@@ -17,6 +17,7 @@ app.use('/api/instances', require('./routes/instance.routes'));
 app.use('/api/users', require('./routes/user.routes'));
 app.use('/api/projects', require('./routes/project.routes'));
 app.use('/api/zones', require('./routes/zone.routes'));
+app.use('/api/connection', require('./routes/connection.routes'));
 
 // Create HTTP server
 const server = http.createServer(app);

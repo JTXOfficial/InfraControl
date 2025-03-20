@@ -69,7 +69,7 @@ const Zones = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  const providers = ['All', 'AWS', 'GCP', 'Azure', 'SelfHosted'];
+  const providers = ['All', 'AWS', 'GCP', 'Azure', 'Self Host'];
 
   useEffect(() => {
     fetchZones();
@@ -192,10 +192,6 @@ const Zones = () => {
       errors.regionCode = 'Region code is required';
     }
     
-    if (formData.provider === 'SelfHosted' && !formData.ipAddress.trim()) {
-      errors.ipAddress = 'IP address is required for self-hosted zones';
-    }
-    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -207,50 +203,6 @@ const Zones = () => {
     
     try {
       setSubmitting(true);
-      
-      // If this is a self-hosted zone, validate the connection first
-      if (formData.provider === 'SelfHosted') {
-        setSnackbar({
-          open: true,
-          message: `Testing connection to ${formData.ipAddress}...`,
-          severity: 'info'
-        });
-        
-        // Call API to validate SSH connection
-        const validationResponse = await fetch('/api/zones/validate-connection', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ipAddress: formData.ipAddress,
-            sshUser: formData.sshUser,
-            sshPort: formData.sshPort,
-            sshPassword: formData.sshPassword
-          }),
-        });
-        
-        const validationData = await validationResponse.json();
-        
-        if (!validationResponse.ok) {
-          throw new Error(validationData.message || 'Failed to validate connection');
-        }
-        
-        if (!validationData.success) {
-          setSnackbar({
-            open: true,
-            message: `Connection failed: ${validationData.message}`,
-            severity: 'error'
-          });
-          return;
-        }
-        
-        setSnackbar({
-          open: true,
-          message: 'Connection successful! Saving zone...',
-          severity: 'success'
-        });
-      }
       
       // Continue with saving the zone
       const endpoint = dialogMode === 'create' ? '/api/zones' : `/api/zones/${currentZone.id}`;
@@ -508,85 +460,31 @@ const Zones = () => {
                 <MenuItem value="AWS">AWS</MenuItem>
                 <MenuItem value="GCP">GCP</MenuItem>
                 <MenuItem value="Azure">Azure</MenuItem>
-                <MenuItem value="SelfHosted">Self-Hosted</MenuItem>
+                <MenuItem value="Self Host">Self Host</MenuItem>
               </Select>
             </FormControl>
             
             <TextField
               fullWidth
-              label={formData.provider === 'SelfHosted' ? "Location Identifier" : "Region Code"}
+              label={formData.provider === 'Self Host' ? "Location Identifier" : "Region Code"}
               name="regionCode"
               value={formData.regionCode}
               onChange={handleInputChange}
               error={!!formErrors.regionCode}
               helperText={formErrors.regionCode || (
-                formData.provider === 'SelfHosted' ? 'A unique identifier for this self-hosted location (e.g., home-lab, office-rack)' :
+                formData.provider === 'Self Host' ? 'A unique identifier for this self-hosted location (e.g., home-lab, office-rack)' :
                 formData.provider === 'AWS' ? 'e.g., us-east-1' : 
                 formData.provider === 'GCP' ? 'e.g., us-central1' : 
                 'e.g., eastus'
               )}
               sx={{ mb: 2 }}
               placeholder={
-                formData.provider === 'SelfHosted' ? 'e.g., home-lab, office-rack' :
+                formData.provider === 'Self Host' ? 'e.g., home-lab, office-rack' :
                 formData.provider === 'AWS' ? 'e.g., us-east-1' : 
                 formData.provider === 'GCP' ? 'e.g., us-central1' : 
                 'e.g., eastus'
               }
             />
-            
-            {formData.provider === 'SelfHosted' && (
-              <>
-                <TextField
-                  fullWidth
-                  label="IP Address"
-                  name="ipAddress"
-                  value={formData.ipAddress}
-                  onChange={handleInputChange}
-                  error={!!formErrors.ipAddress}
-                  helperText={formErrors.ipAddress || "IP address of the self-hosted machine"}
-                  sx={{ mb: 2 }}
-                  required
-                />
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="SSH Username"
-                      name="sshUser"
-                      value={formData.sshUser}
-                      onChange={handleInputChange}
-                      helperText="Default SSH username for this location"
-                      sx={{ mb: 2 }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="SSH Port"
-                      name="sshPort"
-                      type="number"
-                      value={formData.sshPort}
-                      onChange={handleInputChange}
-                      helperText="Default SSH port for this location"
-                      inputProps={{ min: 1, max: 65535 }}
-                      sx={{ mb: 2 }}
-                    />
-                  </Grid>
-                </Grid>
-                
-                <TextField
-                  fullWidth
-                  label="SSH Password"
-                  name="sshPassword"
-                  type="password"
-                  value={formData.sshPassword}
-                  onChange={handleInputChange}
-                  helperText="SSH password (leave empty if using key-based authentication)"
-                  sx={{ mb: 2 }}
-                />
-              </>
-            )}
             
             <TextField
               fullWidth
